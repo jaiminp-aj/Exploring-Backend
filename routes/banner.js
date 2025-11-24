@@ -17,18 +17,24 @@ router.post('/add', auth, async (req, res) => {
       ctaButtonLink,
       order,
       isActive,
-      lang = 'en',
+      lang = 'en', // For backward compatibility
     } = req.body;
 
-    // Validation
-    if (!title) {
+    // Validation - check if title exists (either as string or nested object)
+    const hasTitle = title && (
+      typeof title === 'string' || 
+      (typeof title === 'object' && (title.en || title.es))
+    );
+    
+    if (!hasTitle) {
       return res.status(400).json({
         success: false,
-        message: 'Banner title is required',
+        message: 'Banner title is required in at least one language',
       });
     }
 
     // Prepare data with language support
+    // prepareForSave handles both nested objects and flat strings
     const bannerData = prepareForSave({
       title,
       subtitle,
@@ -165,26 +171,28 @@ router.put('/:id', auth, async (req, res) => {
 
     // Handle language-specific updates for translatable fields
     if (title !== undefined) {
-      if (typeof title === 'string') {
-        banner.title = { ...(banner.title || {}), [lang]: title };
-      } else if (typeof title === 'object') {
+      if (typeof title === 'object' && (title.en !== undefined || title.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         banner.title = { ...(banner.title || {}), ...title };
+      } else if (typeof title === 'string') {
+        // Old format: single string value - update for specified language
+        banner.title = { ...(banner.title || {}), [lang]: title };
       }
     }
     
     if (subtitle !== undefined) {
-      if (typeof subtitle === 'string') {
-        banner.subtitle = { ...(banner.subtitle || {}), [lang]: subtitle };
-      } else if (typeof subtitle === 'object') {
+      if (typeof subtitle === 'object' && (subtitle.en !== undefined || subtitle.es !== undefined)) {
         banner.subtitle = { ...(banner.subtitle || {}), ...subtitle };
+      } else if (typeof subtitle === 'string') {
+        banner.subtitle = { ...(banner.subtitle || {}), [lang]: subtitle };
       }
     }
     
     if (ctaButtonText !== undefined) {
-      if (typeof ctaButtonText === 'string') {
-        banner.ctaButtonText = { ...(banner.ctaButtonText || {}), [lang]: ctaButtonText };
-      } else if (typeof ctaButtonText === 'object') {
+      if (typeof ctaButtonText === 'object' && (ctaButtonText.en !== undefined || ctaButtonText.es !== undefined)) {
         banner.ctaButtonText = { ...(banner.ctaButtonText || {}), ...ctaButtonText };
+      } else if (typeof ctaButtonText === 'string') {
+        banner.ctaButtonText = { ...(banner.ctaButtonText || {}), [lang]: ctaButtonText };
       }
     }
     

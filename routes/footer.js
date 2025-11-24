@@ -20,17 +20,23 @@ router.post('/add', auth, async (req, res) => {
       additionalInfo,
     } = req.body;
 
-    // Validation - copyrightTitle is required
-    if (!copyrightTitle) {
+    // Validation - check if copyrightTitle exists (either as string or nested object)
+    const hasCopyrightTitle = copyrightTitle && (
+      typeof copyrightTitle === 'string' || 
+      (typeof copyrightTitle === 'object' && (copyrightTitle.en || copyrightTitle.es))
+    );
+    
+    if (!hasCopyrightTitle) {
       return res.status(400).json({
         success: false,
-        message: 'Copyright title is required',
+        message: 'Copyright title is required in at least one language',
       });
     }
 
-    const { lang = 'en' } = req.body;
+    const { lang = 'en' } = req.body; // For backward compatibility
     
     // Prepare data with language support
+    // prepareForSave handles both nested objects and flat strings
     const footerData = prepareForSave({
       copyrightTitle,
       description,
@@ -130,34 +136,36 @@ router.put('/:id', auth, async (req, res) => {
     
     // Handle language-specific updates for translatable fields
     if (copyrightTitle !== undefined) {
-      if (typeof copyrightTitle === 'string') {
-        footer.copyrightTitle = { ...(footer.copyrightTitle || {}), [lang]: copyrightTitle };
-      } else if (typeof copyrightTitle === 'object') {
+      if (typeof copyrightTitle === 'object' && (copyrightTitle.en !== undefined || copyrightTitle.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         footer.copyrightTitle = { ...(footer.copyrightTitle || {}), ...copyrightTitle };
+      } else if (typeof copyrightTitle === 'string') {
+        // Old format: single string value - update for specified language
+        footer.copyrightTitle = { ...(footer.copyrightTitle || {}), [lang]: copyrightTitle };
       }
     }
     
     if (description !== undefined) {
-      if (typeof description === 'string') {
-        footer.description = { ...(footer.description || {}), [lang]: description };
-      } else if (typeof description === 'object') {
+      if (typeof description === 'object' && (description.en !== undefined || description.es !== undefined)) {
         footer.description = { ...(footer.description || {}), ...description };
+      } else if (typeof description === 'string') {
+        footer.description = { ...(footer.description || {}), [lang]: description };
       }
     }
     
     if (address !== undefined) {
-      if (typeof address === 'string') {
-        footer.address = { ...(footer.address || {}), [lang]: address };
-      } else if (typeof address === 'object') {
+      if (typeof address === 'object' && (address.en !== undefined || address.es !== undefined)) {
         footer.address = { ...(footer.address || {}), ...address };
+      } else if (typeof address === 'string') {
+        footer.address = { ...(footer.address || {}), [lang]: address };
       }
     }
     
     if (additionalInfo !== undefined) {
-      if (typeof additionalInfo === 'string') {
-        footer.additionalInfo = { ...(footer.additionalInfo || {}), [lang]: additionalInfo };
-      } else if (typeof additionalInfo === 'object') {
+      if (typeof additionalInfo === 'object' && (additionalInfo.en !== undefined || additionalInfo.es !== undefined)) {
         footer.additionalInfo = { ...(footer.additionalInfo || {}), ...additionalInfo };
+      } else if (typeof additionalInfo === 'string') {
+        footer.additionalInfo = { ...(footer.additionalInfo || {}), [lang]: additionalInfo };
       }
     }
     
@@ -166,10 +174,12 @@ router.put('/:id', auth, async (req, res) => {
       footer.links = links.map(link => {
         const newLink = { ...link };
         if (link.title) {
-          if (typeof link.title === 'string') {
-            newLink.title = { ...(newLink.title || {}), [lang]: link.title };
-          } else if (typeof link.title === 'object') {
+          if (typeof link.title === 'object' && (link.title.en !== undefined || link.title.es !== undefined)) {
+            // New format: nested object
             newLink.title = { ...(newLink.title || {}), ...link.title };
+          } else if (typeof link.title === 'string') {
+            // Old format: single string
+            newLink.title = { ...(newLink.title || {}), [lang]: link.title };
           }
         }
         return newLink;
@@ -180,10 +190,12 @@ router.put('/:id', auth, async (req, res) => {
       footer.quickLinks = quickLinks.map(link => {
         const newLink = { ...link };
         if (link.title) {
-          if (typeof link.title === 'string') {
-            newLink.title = { ...(newLink.title || {}), [lang]: link.title };
-          } else if (typeof link.title === 'object') {
+          if (typeof link.title === 'object' && (link.title.en !== undefined || link.title.es !== undefined)) {
+            // New format: nested object
             newLink.title = { ...(newLink.title || {}), ...link.title };
+          } else if (typeof link.title === 'string') {
+            // Old format: single string
+            newLink.title = { ...(newLink.title || {}), [lang]: link.title };
           }
         }
         return newLink;

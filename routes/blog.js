@@ -20,25 +20,35 @@ router.post('/add', auth, async (req, res) => {
       tags,
     } = req.body;
 
-    // Validation
-    if (!title) {
+    // Validation - check if title exists (either as string or nested object)
+    const hasTitle = title && (
+      typeof title === 'string' || 
+      (typeof title === 'object' && (title.en || title.es))
+    );
+    
+    if (!hasTitle) {
       return res.status(400).json({
         success: false,
-        message: 'Blog title is required',
+        message: 'Blog title is required in at least one language',
       });
     }
 
-    const { lang = 'en' } = req.body;
+    const { lang = 'en' } = req.body; // For backward compatibility
     
     // Check if slug already exists (if provided) - check both languages
     if (slug) {
-      const slugToCheck = typeof slug === 'string' ? { [lang]: slug } : slug;
+      const slugToCheck = typeof slug === 'object' && (slug.en || slug.es) 
+        ? slug 
+        : { [lang]: slug };
       const slugQuery = {};
       if (slugToCheck.en) slugQuery['slug.en'] = slugToCheck.en;
       if (slugToCheck.es) slugQuery['slug.es'] = slugToCheck.es;
       
       if (Object.keys(slugQuery).length > 0) {
-        const existingBlog = await Blog.findOne({ $or: Object.entries(slugQuery).map(([k, v]) => ({ [k]: v })) });
+        const existingBlog = await Blog.findOne({ 
+          _id: { $ne: req.body._id }, // Exclude current blog if updating
+          $or: Object.entries(slugQuery).map(([k, v]) => ({ [k]: v })) 
+        });
         if (existingBlog) {
           return res.status(400).json({
             success: false,
@@ -49,6 +59,7 @@ router.post('/add', auth, async (req, res) => {
     }
 
     // Prepare data with language support
+    // prepareForSave handles both nested objects and flat strings
     const blogData = prepareForSave({
       contentType: contentType || 'Blog Post',
       title,
@@ -276,34 +287,36 @@ router.put('/:id', auth, async (req, res) => {
     
     // Handle language-specific updates for translatable fields
     if (title !== undefined) {
-      if (typeof title === 'string') {
-        blog.title = { ...(blog.title || {}), [lang]: title };
-      } else if (typeof title === 'object') {
+      if (typeof title === 'object' && (title.en !== undefined || title.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         blog.title = { ...(blog.title || {}), ...title };
+      } else if (typeof title === 'string') {
+        // Old format: single string value - update for specified language
+        blog.title = { ...(blog.title || {}), [lang]: title };
       }
     }
     
     if (excerpt !== undefined) {
-      if (typeof excerpt === 'string') {
-        blog.excerpt = { ...(blog.excerpt || {}), [lang]: excerpt };
-      } else if (typeof excerpt === 'object') {
+      if (typeof excerpt === 'object' && (excerpt.en !== undefined || excerpt.es !== undefined)) {
         blog.excerpt = { ...(blog.excerpt || {}), ...excerpt };
+      } else if (typeof excerpt === 'string') {
+        blog.excerpt = { ...(blog.excerpt || {}), [lang]: excerpt };
       }
     }
     
     if (slug !== undefined) {
-      if (typeof slug === 'string') {
-        blog.slug = { ...(blog.slug || {}), [lang]: slug };
-      } else if (typeof slug === 'object') {
+      if (typeof slug === 'object' && (slug.en !== undefined || slug.es !== undefined)) {
         blog.slug = { ...(blog.slug || {}), ...slug };
+      } else if (typeof slug === 'string') {
+        blog.slug = { ...(blog.slug || {}), [lang]: slug };
       }
     }
     
     if (content !== undefined) {
-      if (typeof content === 'string') {
-        blog.content = { ...(blog.content || {}), [lang]: content };
-      } else if (typeof content === 'object') {
+      if (typeof content === 'object' && (content.en !== undefined || content.es !== undefined)) {
         blog.content = { ...(blog.content || {}), ...content };
+      } else if (typeof content === 'string') {
+        blog.content = { ...(blog.content || {}), [lang]: content };
       }
     }
     

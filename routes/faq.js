@@ -13,18 +13,24 @@ router.post('/add', auth, async (req, res) => {
       content,
       published,
       order,
-      lang = 'en',
+      lang = 'en', // For backward compatibility
     } = req.body;
 
-    // Validation
-    if (!description) {
+    // Validation - check if description exists (either as string or nested object)
+    const hasDescription = description && (
+      typeof description === 'string' || 
+      (typeof description === 'object' && (description.en || description.es))
+    );
+    
+    if (!hasDescription) {
       return res.status(400).json({
         success: false,
-        message: 'FAQ description is required',
+        message: 'FAQ description is required in at least one language',
       });
     }
 
     // Prepare data with language support
+    // prepareForSave handles both nested objects and flat strings
     const faqData = prepareForSave({
       description,
       content: content || [],
@@ -153,10 +159,12 @@ router.put('/:id', auth, async (req, res) => {
 
     // Handle language-specific updates
     if (description !== undefined) {
-      if (typeof description === 'string') {
-        faq.description = { ...(faq.description || {}), [lang]: description };
-      } else if (typeof description === 'object') {
+      if (typeof description === 'object' && (description.en !== undefined || description.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         faq.description = { ...(faq.description || {}), ...description };
+      } else if (typeof description === 'string') {
+        // Old format: single string value - update for specified language
+        faq.description = { ...(faq.description || {}), [lang]: description };
       }
     }
     
@@ -164,17 +172,21 @@ router.put('/:id', auth, async (req, res) => {
       faq.content = content.map(item => {
         const newItem = { ...item };
         if (item.title) {
-          if (typeof item.title === 'string') {
-            newItem.title = { ...(item.title || {}), [lang]: item.title };
-          } else if (typeof item.title === 'object') {
-            newItem.title = { ...(item.title || {}), ...item.title };
+          if (typeof item.title === 'object' && (item.title.en !== undefined || item.title.es !== undefined)) {
+            // New format: nested object
+            newItem.title = { ...(newItem.title || {}), ...item.title };
+          } else if (typeof item.title === 'string') {
+            // Old format: single string
+            newItem.title = { ...(newItem.title || {}), [lang]: item.title };
           }
         }
         if (item.description) {
-          if (typeof item.description === 'string') {
-            newItem.description = { ...(item.description || {}), [lang]: item.description };
-          } else if (typeof item.description === 'object') {
-            newItem.description = { ...(item.description || {}), ...item.description };
+          if (typeof item.description === 'object' && (item.description.en !== undefined || item.description.es !== undefined)) {
+            // New format: nested object
+            newItem.description = { ...(newItem.description || {}), ...item.description };
+          } else if (typeof item.description === 'string') {
+            // Old format: single string
+            newItem.description = { ...(newItem.description || {}), [lang]: item.description };
           }
         }
         return newItem;

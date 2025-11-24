@@ -33,16 +33,31 @@ router.post('/add', auth, async (req, res) => {
       });
     }
 
-    if (!description1 || !description2 || !description3) {
+    // Check if descriptions exist (either as string or nested object)
+    const hasDesc1 = description1 && (
+      typeof description1 === 'string' || 
+      (typeof description1 === 'object' && (description1.en || description1.es))
+    );
+    const hasDesc2 = description2 && (
+      typeof description2 === 'string' || 
+      (typeof description2 === 'object' && (description2.en || description2.es))
+    );
+    const hasDesc3 = description3 && (
+      typeof description3 === 'string' || 
+      (typeof description3 === 'object' && (description3.en || description3.es))
+    );
+
+    if (!hasDesc1 || !hasDesc2 || !hasDesc3) {
       return res.status(400).json({
         success: false,
-        message: 'All three descriptions are required',
+        message: 'All three descriptions are required in at least one language',
       });
     }
 
-    const { lang = 'en' } = req.body;
+    const { lang = 'en' } = req.body; // For backward compatibility
     
     // Prepare data with language support
+    // prepareForSave handles both nested objects and flat strings
     const islamData = prepareForSave({
       videoUrl,
       videoThumbnail,
@@ -181,24 +196,26 @@ router.put('/:id', auth, async (req, res) => {
     
     // Handle language-specific updates for descriptions
     if (description1 !== undefined) {
-      if (typeof description1 === 'string') {
-        whatIsIslam.description1 = { ...(whatIsIslam.description1 || {}), [lang]: description1 };
-      } else if (typeof description1 === 'object') {
+      if (typeof description1 === 'object' && (description1.en !== undefined || description1.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         whatIsIslam.description1 = { ...(whatIsIslam.description1 || {}), ...description1 };
+      } else if (typeof description1 === 'string') {
+        // Old format: single string value - update for specified language
+        whatIsIslam.description1 = { ...(whatIsIslam.description1 || {}), [lang]: description1 };
       }
     }
     if (description2 !== undefined) {
-      if (typeof description2 === 'string') {
-        whatIsIslam.description2 = { ...(whatIsIslam.description2 || {}), [lang]: description2 };
-      } else if (typeof description2 === 'object') {
+      if (typeof description2 === 'object' && (description2.en !== undefined || description2.es !== undefined)) {
         whatIsIslam.description2 = { ...(whatIsIslam.description2 || {}), ...description2 };
+      } else if (typeof description2 === 'string') {
+        whatIsIslam.description2 = { ...(whatIsIslam.description2 || {}), [lang]: description2 };
       }
     }
     if (description3 !== undefined) {
-      if (typeof description3 === 'string') {
-        whatIsIslam.description3 = { ...(whatIsIslam.description3 || {}), [lang]: description3 };
-      } else if (typeof description3 === 'object') {
+      if (typeof description3 === 'object' && (description3.en !== undefined || description3.es !== undefined)) {
         whatIsIslam.description3 = { ...(whatIsIslam.description3 || {}), ...description3 };
+      } else if (typeof description3 === 'string') {
+        whatIsIslam.description3 = { ...(whatIsIslam.description3 || {}), [lang]: description3 };
       }
     }
     

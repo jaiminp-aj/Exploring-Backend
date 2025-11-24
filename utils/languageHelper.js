@@ -76,7 +76,9 @@ const transformArrayByLanguage = (docs, language = 'en') => {
 };
 
 /**
- * Prepare data for saving - converts flat language data to nested structure
+ * Prepare data for saving - handles both nested objects and flat strings
+ * Supports new format: { title: { en: "...", es: "..." } }
+ * Also supports old format: { title: "...", lang: "en" } for backward compatibility
  */
 const prepareForSave = (data, language = 'en') => {
   const prepared = { ...data };
@@ -87,28 +89,53 @@ const prepareForSave = (data, language = 'en') => {
   ];
   
   translatableFields.forEach(field => {
-    if (prepared[field] !== undefined && typeof prepared[field] === 'string') {
+    if (prepared[field] !== undefined) {
+      // If it's already a nested object with en/es keys, use it as-is
+      if (typeof prepared[field] === 'object' && 
+          !Array.isArray(prepared[field]) &&
+          (prepared[field].en !== undefined || prepared[field].es !== undefined)) {
+        // Already in correct format, keep it - ensure both en and es exist (even if empty)
+        prepared[field] = {
+          en: prepared[field].en || '',
+          es: prepared[field].es || '',
+        };
+        return; // Skip to next field
+      }
+      
       // If it's a string, convert to nested object
-      prepared[field] = {
-        [language]: prepared[field]
-      };
-    } else if (prepared[field] && typeof prepared[field] === 'object' && !prepared[field][language]) {
-      // If it's already an object but doesn't have this language, add it
-      prepared[field] = {
-        ...prepared[field],
-        [language]: prepared[field].en || prepared[field].es || ''
-      };
+      if (typeof prepared[field] === 'string') {
+        prepared[field] = {
+          [language]: prepared[field]
+        };
+      } else if (prepared[field] && typeof prepared[field] === 'object' && !Array.isArray(prepared[field])) {
+        // If it's an object but not in the right format, try to preserve it
+        // This handles edge cases
+        if (!prepared[field].en && !prepared[field].es) {
+          prepared[field] = {
+            [language]: prepared[field].value || prepared[field].text || ''
+          };
+        }
+      }
     }
   });
   
-  // Handle nested arrays
+  // Handle nested arrays (FAQ content, Footer links, etc.)
   if (prepared.content && Array.isArray(prepared.content)) {
     prepared.content = prepared.content.map(item => {
       const newItem = { ...item };
-      if (item.title && typeof item.title === 'string') {
+      // If title is already nested object, keep it
+      if (item.title && typeof item.title === 'object' && 
+          (item.title.en !== undefined || item.title.es !== undefined)) {
+        // Already in correct format
+      } else if (item.title && typeof item.title === 'string') {
         newItem.title = { [language]: item.title };
       }
-      if (item.description && typeof item.description === 'string') {
+      
+      // If description is already nested object, keep it
+      if (item.description && typeof item.description === 'object' && 
+          (item.description.en !== undefined || item.description.es !== undefined)) {
+        // Already in correct format
+      } else if (item.description && typeof item.description === 'string') {
         newItem.description = { [language]: item.description };
       }
       return newItem;
@@ -118,7 +145,11 @@ const prepareForSave = (data, language = 'en') => {
   if (prepared.links && Array.isArray(prepared.links)) {
     prepared.links = prepared.links.map(link => {
       const newLink = { ...link };
-      if (link.title && typeof link.title === 'string') {
+      // If title is already nested object, keep it
+      if (link.title && typeof link.title === 'object' && 
+          (link.title.en !== undefined || link.title.es !== undefined)) {
+        // Already in correct format
+      } else if (link.title && typeof link.title === 'string') {
         newLink.title = { [language]: link.title };
       }
       return newLink;
@@ -128,7 +159,11 @@ const prepareForSave = (data, language = 'en') => {
   if (prepared.quickLinks && Array.isArray(prepared.quickLinks)) {
     prepared.quickLinks = prepared.quickLinks.map(link => {
       const newLink = { ...link };
-      if (link.title && typeof link.title === 'string') {
+      // If title is already nested object, keep it
+      if (link.title && typeof link.title === 'object' && 
+          (link.title.en !== undefined || link.title.es !== undefined)) {
+        // Already in correct format
+      } else if (link.title && typeof link.title === 'string') {
         newLink.title = { [language]: link.title };
       }
       return newLink;

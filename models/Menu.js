@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+// Delete the model if it already exists to avoid schema conflicts
+if (mongoose.models.Menu) {
+  delete mongoose.models.Menu;
+}
+
 const MenuSchema = new mongoose.Schema({
   menuTitle: {
     en: {

@@ -14,14 +14,19 @@ router.post('/add', auth, async (req, res) => {
       visibleOnSite,
       openInNewTab,
       order,
-      lang = 'en', // Language for this creation
+      lang = 'en', // For backward compatibility
     } = req.body;
 
-    // Validation
-    if (!menuTitle) {
+    // Validation - check if menuTitle exists (either as string or nested object)
+    const hasMenuTitle = menuTitle && (
+      typeof menuTitle === 'string' || 
+      (typeof menuTitle === 'object' && (menuTitle.en || menuTitle.es))
+    );
+    
+    if (!hasMenuTitle) {
       return res.status(400).json({
         success: false,
-        message: 'Menu title is required',
+        message: 'Menu title is required in at least one language',
       });
     }
 
@@ -33,6 +38,7 @@ router.post('/add', auth, async (req, res) => {
     }
 
     // Prepare data with language support (linkUrl is NOT translatable)
+    // prepareForSave handles both nested objects and flat strings
     const menuData = prepareForSave({
       menuTitle,
       visibleOnSite: visibleOnSite !== undefined ? visibleOnSite : true,
@@ -42,6 +48,11 @@ router.post('/add', auth, async (req, res) => {
     
     // Add linkUrl separately (not translatable - same for all languages)
     menuData.linkUrl = linkUrl;
+
+    // Ensure menuTitle is a plain object (not a Mongoose document or special object)
+    if (menuData.menuTitle && typeof menuData.menuTitle === 'object') {
+      menuData.menuTitle = JSON.parse(JSON.stringify(menuData.menuTitle));
+    }
 
     // Create new menu item
     const menuItem = new Menu(menuData);
@@ -165,17 +176,17 @@ router.put('/:id', auth, async (req, res) => {
 
     // Handle language-specific updates
     if (menuTitle !== undefined) {
-      if (typeof menuTitle === 'string') {
-        // Single string value - update for specified language
-        menuItem.menuTitle = {
-          ...(menuItem.menuTitle || {}),
-          [lang]: menuTitle
-        };
-      } else if (typeof menuTitle === 'object') {
-        // Already in nested format - merge it
+      if (typeof menuTitle === 'object' && (menuTitle.en !== undefined || menuTitle.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         menuItem.menuTitle = {
           ...(menuItem.menuTitle || {}),
           ...menuTitle
+        };
+      } else if (typeof menuTitle === 'string') {
+        // Old format: single string value - update for specified language
+        menuItem.menuTitle = {
+          ...(menuItem.menuTitle || {}),
+          [lang]: menuTitle
         };
       }
     }

@@ -14,17 +14,23 @@ router.post('/add', auth, async (req, res) => {
       order,
     } = req.body;
 
-    // Validation
-    if (!introduction) {
+    // Validation - check if introduction exists (either as string or nested object)
+    const hasIntroduction = introduction && (
+      typeof introduction === 'string' || 
+      (typeof introduction === 'object' && (introduction.en || introduction.es))
+    );
+    
+    if (!hasIntroduction) {
       return res.status(400).json({
         success: false,
-        message: 'Introduction is required',
+        message: 'Introduction is required in at least one language',
       });
     }
 
-    const { lang = 'en' } = req.body;
+    const { lang = 'en' } = req.body; // For backward compatibility
     
     // Prepare data with language support
+    // prepareForSave handles both nested objects and flat strings
     const basicsData = prepareForSave({
       introduction,
       published: published !== undefined ? published : true,
@@ -152,10 +158,12 @@ router.put('/:id', auth, async (req, res) => {
     
     // Handle language-specific updates
     if (introduction !== undefined) {
-      if (typeof introduction === 'string') {
-        basics.introduction = { ...(basics.introduction || {}), [lang]: introduction };
-      } else if (typeof introduction === 'object') {
+      if (typeof introduction === 'object' && (introduction.en !== undefined || introduction.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
         basics.introduction = { ...(basics.introduction || {}), ...introduction };
+      } else if (typeof introduction === 'string') {
+        // Old format: single string value - update for specified language
+        basics.introduction = { ...(basics.introduction || {}), [lang]: introduction };
       }
     }
     
