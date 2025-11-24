@@ -2,17 +2,34 @@ const mongoose = require('mongoose');
 
 const FooterSchema = new mongoose.Schema({
   copyrightTitle: {
-    type: String,
-    required: [true, 'Copyright title is required'],
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   description: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   address: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   phone: {
     type: String,
@@ -25,8 +42,14 @@ const FooterSchema = new mongoose.Schema({
   },
   links: [{
     title: {
-      type: String,
-      trim: true,
+      en: {
+        type: String,
+        trim: true,
+      },
+      es: {
+        type: String,
+        trim: true,
+      },
     },
     url: {
       type: String,
@@ -49,8 +72,14 @@ const FooterSchema = new mongoose.Schema({
   }],
   quickLinks: [{
     title: {
-      type: String,
-      trim: true,
+      en: {
+        type: String,
+        trim: true,
+      },
+      es: {
+        type: String,
+        trim: true,
+      },
     },
     url: {
       type: String,
@@ -58,11 +87,25 @@ const FooterSchema = new mongoose.Schema({
     },
   }],
   additionalInfo: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
 }, {
   timestamps: true,
+});
+
+// Validation: At least one language must have a copyright title
+FooterSchema.pre('validate', function(next) {
+  if (!this.copyrightTitle?.en && !this.copyrightTitle?.es) {
+    this.invalidate('copyrightTitle', 'Copyright title is required in at least one language');
+  }
+  next();
 });
 
 module.exports = mongoose.model('Footer', FooterSchema);

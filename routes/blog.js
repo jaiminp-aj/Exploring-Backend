@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Blog = require('../models/Blog');
 const auth = require('../middleware/auth');
+const getLanguage = require('../middleware/language');
+const { transformByLanguage, transformArrayByLanguage, prepareForSave } = require('../utils/languageHelper');
 
 // Create Blog Post (Protected route)
 router.post('/add', auth, async (req, res) => {
@@ -26,19 +28,28 @@ router.post('/add', auth, async (req, res) => {
       });
     }
 
-    // Check if slug already exists (if provided)
+    const { lang = 'en' } = req.body;
+    
+    // Check if slug already exists (if provided) - check both languages
     if (slug) {
-      const existingBlog = await Blog.findOne({ slug });
-      if (existingBlog) {
-        return res.status(400).json({
-          success: false,
-          message: 'Slug already exists. Please use a different slug.',
-        });
+      const slugToCheck = typeof slug === 'string' ? { [lang]: slug } : slug;
+      const slugQuery = {};
+      if (slugToCheck.en) slugQuery['slug.en'] = slugToCheck.en;
+      if (slugToCheck.es) slugQuery['slug.es'] = slugToCheck.es;
+      
+      if (Object.keys(slugQuery).length > 0) {
+        const existingBlog = await Blog.findOne({ $or: Object.entries(slugQuery).map(([k, v]) => ({ [k]: v })) });
+        if (existingBlog) {
+          return res.status(400).json({
+            success: false,
+            message: 'Slug already exists. Please use a different slug.',
+          });
+        }
       }
     }
 
-    // Create new blog post
-    const blog = new Blog({
+    // Prepare data with language support
+    const blogData = prepareForSave({
       contentType: contentType || 'Blog Post',
       title,
       excerpt,
@@ -48,7 +59,10 @@ router.post('/add', auth, async (req, res) => {
       published: published !== undefined ? published : false,
       author,
       tags: tags || [],
-    });
+    }, lang);
+
+    // Create new blog post
+    const blog = new Blog(blogData);
 
     await blog.save();
 
@@ -83,7 +97,7 @@ router.post('/add', auth, async (req, res) => {
 });
 
 // Get All Blog Posts
-router.get('/', async (req, res) => {
+router.get('/', getLanguage, async (req, res) => {
   try {
     const { 
       publishedOnly, 
@@ -95,6 +109,7 @@ router.get('/', async (req, res) => {
       sortBy = 'createdAt',
       sortOrder = 'desc'
     } = req.query;
+    const language = req.language;
     
     let query = {};
     
@@ -122,10 +137,16 @@ router.get('/', async (req, res) => {
     const blogs = await Blog.find(query)
       .sort(sortOptions)
       .skip(skip)
-      .limit(parseInt(limit))
-      .select('-content'); // Exclude full content from list view
+      .limit(parseInt(limit));
 
     const total = await Blog.countDocuments(query);
+
+    // Transform data based on requested language
+    const transformed = transformArrayByLanguage(blogs, language).map(blog => {
+      // Exclude full content from list view for performance
+      const { content, ...rest } = blog;
+      return rest;
+    });
 
     res.status(200).json({
       success: true,
@@ -133,7 +154,8 @@ router.get('/', async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: blogs,
+      data: transformed,
+      language,
     });
   } catch (error) {
     console.error('Get blogs error:', error);
@@ -146,9 +168,10 @@ router.get('/', async (req, res) => {
 });
 
 // Get Single Blog Post by ID or Slug
-router.get('/:identifier', async (req, res) => {
+router.get('/:identifier', getLanguage, async (req, res) => {
   try {
     const { identifier } = req.params;
+    const language = req.language;
     
     // Check if identifier is a valid MongoDB ObjectId
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
@@ -157,7 +180,13 @@ router.get('/:identifier', async (req, res) => {
     if (isObjectId) {
       blog = await Blog.findById(identifier);
     } else {
-      blog = await Blog.findOne({ slug: identifier });
+      // Try to find by slug in either language
+      blog = await Blog.findOne({
+        $or: [
+          { 'slug.en': identifier },
+          { 'slug.es': identifier }
+        ]
+      });
     }
     
     if (!blog) {
@@ -171,9 +200,13 @@ router.get('/:identifier', async (req, res) => {
     blog.views += 1;
     await blog.save();
 
+    // Transform data based on requested language
+    const transformed = transformByLanguage(blog, language);
+
     res.status(200).json({
       success: true,
-      data: blog,
+      data: transformed,
+      language,
     });
   } catch (error) {
     console.error('Get blog error:', error);
@@ -197,6 +230,7 @@ router.get('/:identifier', async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
+    const { lang = 'en' } = req.body;
     
     if (!blog) {
       return res.status(404).json({
@@ -217,23 +251,63 @@ router.put('/:id', auth, async (req, res) => {
       tags,
     } = req.body;
 
-    // Check if slug is being updated and if it already exists
-    if (slug && slug !== blog.slug) {
-      const existingBlog = await Blog.findOne({ slug });
-      if (existingBlog) {
-        return res.status(400).json({
-          success: false,
-          message: 'Slug already exists. Please use a different slug.',
+    // Check if slug is being updated and if it already exists (for language-specific slugs)
+    if (slug) {
+      const slugToCheck = typeof slug === 'string' ? { [lang]: slug } : slug;
+      const slugQuery = {};
+      if (slugToCheck.en) slugQuery['slug.en'] = slugToCheck.en;
+      if (slugToCheck.es) slugQuery['slug.es'] = slugToCheck.es;
+      
+      if (Object.keys(slugQuery).length > 0) {
+        const existingBlog = await Blog.findOne({
+          _id: { $ne: blog._id },
+          $or: Object.entries(slugQuery).map(([k, v]) => ({ [k]: v }))
         });
+        if (existingBlog) {
+          return res.status(400).json({
+            success: false,
+            message: 'Slug already exists. Please use a different slug.',
+          });
+        }
       }
     }
 
     if (contentType !== undefined) blog.contentType = contentType;
-    if (title !== undefined) blog.title = title;
-    if (excerpt !== undefined) blog.excerpt = excerpt;
-    if (slug !== undefined) blog.slug = slug;
+    
+    // Handle language-specific updates for translatable fields
+    if (title !== undefined) {
+      if (typeof title === 'string') {
+        blog.title = { ...(blog.title || {}), [lang]: title };
+      } else if (typeof title === 'object') {
+        blog.title = { ...(blog.title || {}), ...title };
+      }
+    }
+    
+    if (excerpt !== undefined) {
+      if (typeof excerpt === 'string') {
+        blog.excerpt = { ...(blog.excerpt || {}), [lang]: excerpt };
+      } else if (typeof excerpt === 'object') {
+        blog.excerpt = { ...(blog.excerpt || {}), ...excerpt };
+      }
+    }
+    
+    if (slug !== undefined) {
+      if (typeof slug === 'string') {
+        blog.slug = { ...(blog.slug || {}), [lang]: slug };
+      } else if (typeof slug === 'object') {
+        blog.slug = { ...(blog.slug || {}), ...slug };
+      }
+    }
+    
+    if (content !== undefined) {
+      if (typeof content === 'string') {
+        blog.content = { ...(blog.content || {}), [lang]: content };
+      } else if (typeof content === 'object') {
+        blog.content = { ...(blog.content || {}), ...content };
+      }
+    }
+    
     if (featuredImageUrl !== undefined) blog.featuredImageUrl = featuredImageUrl;
-    if (content !== undefined) blog.content = content;
     if (published !== undefined) blog.published = published;
     if (author !== undefined) blog.author = author;
     if (tags !== undefined) blog.tags = tags;

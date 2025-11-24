@@ -2,9 +2,14 @@ const mongoose = require('mongoose');
 
 const MenuSchema = new mongoose.Schema({
   menuTitle: {
-    type: String,
-    required: [true, 'Menu title is required'],
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   linkUrl: {
     type: String,
@@ -25,6 +30,14 @@ const MenuSchema = new mongoose.Schema({
   },
 }, {
   timestamps: true,
+});
+
+// Validation: At least one language must have a title
+MenuSchema.pre('validate', function(next) {
+  if (!this.menuTitle?.en && !this.menuTitle?.es) {
+    this.invalidate('menuTitle', 'Menu title is required in at least one language');
+  }
+  next();
 });
 
 module.exports = mongoose.model('Menu', MenuSchema);

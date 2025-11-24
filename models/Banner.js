@@ -2,13 +2,24 @@ const mongoose = require('mongoose');
 
 const BannerSchema = new mongoose.Schema({
   title: {
-    type: String,
-    required: [true, 'Banner title is required'],
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   subtitle: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   backgroundImageUrl: {
     type: String,
@@ -19,8 +30,14 @@ const BannerSchema = new mongoose.Schema({
     trim: true,
   },
   ctaButtonText: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   ctaButtonLink: {
     type: String,
@@ -36,6 +53,14 @@ const BannerSchema = new mongoose.Schema({
   },
 }, {
   timestamps: true,
+});
+
+// Validation: At least one language must have a title
+BannerSchema.pre('validate', function(next) {
+  if (!this.title?.en && !this.title?.es) {
+    this.invalidate('title', 'Banner title is required in at least one language');
+  }
+  next();
 });
 
 module.exports = mongoose.model('Banner', BannerSchema);

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Banner = require('../models/Banner');
 const auth = require('../middleware/auth');
+const getLanguage = require('../middleware/language');
+const { transformByLanguage, transformArrayByLanguage, prepareForSave } = require('../utils/languageHelper');
 
 // Create Banner (Protected route)
 router.post('/add', auth, async (req, res) => {
@@ -15,6 +17,7 @@ router.post('/add', auth, async (req, res) => {
       ctaButtonLink,
       order,
       isActive,
+      lang = 'en',
     } = req.body;
 
     // Validation
@@ -25,8 +28,8 @@ router.post('/add', auth, async (req, res) => {
       });
     }
 
-    // Create new banner
-    const banner = new Banner({
+    // Prepare data with language support
+    const bannerData = prepareForSave({
       title,
       subtitle,
       backgroundImageUrl,
@@ -35,7 +38,10 @@ router.post('/add', auth, async (req, res) => {
       ctaButtonLink,
       order: order !== undefined ? order : 0,
       isActive: isActive !== undefined ? isActive : true,
-    });
+    }, lang);
+
+    // Create new banner
+    const banner = new Banner(bannerData);
 
     await banner.save();
 
@@ -63,9 +69,10 @@ router.post('/add', auth, async (req, res) => {
 });
 
 // Get All Banners
-router.get('/', async (req, res) => {
+router.get('/', getLanguage, async (req, res) => {
   try {
     const { activeOnly } = req.query;
+    const language = req.language;
     
     let query = {};
     if (activeOnly === 'true') {
@@ -74,10 +81,14 @@ router.get('/', async (req, res) => {
 
     const banners = await Banner.find(query).sort({ order: 1, createdAt: -1 });
 
+    // Transform data based on requested language
+    const transformed = transformArrayByLanguage(banners, language);
+
     res.status(200).json({
       success: true,
       count: banners.length,
-      data: banners,
+      data: transformed,
+      language,
     });
   } catch (error) {
     console.error('Get banners error:', error);
@@ -90,9 +101,10 @@ router.get('/', async (req, res) => {
 });
 
 // Get Single Banner by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', getLanguage, async (req, res) => {
   try {
     const banner = await Banner.findById(req.params.id);
+    const language = req.language;
     
     if (!banner) {
       return res.status(404).json({
@@ -101,9 +113,13 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    // Transform data based on requested language
+    const transformed = transformByLanguage(banner, language);
+
     res.status(200).json({
       success: true,
-      data: banner,
+      data: transformed,
+      language,
     });
   } catch (error) {
     console.error('Get banner error:', error);
@@ -127,6 +143,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const banner = await Banner.findById(req.params.id);
+    const { lang = 'en' } = req.body;
     
     if (!banner) {
       return res.status(404).json({
@@ -146,11 +163,33 @@ router.put('/:id', auth, async (req, res) => {
       isActive,
     } = req.body;
 
-    if (title !== undefined) banner.title = title;
-    if (subtitle !== undefined) banner.subtitle = subtitle;
+    // Handle language-specific updates for translatable fields
+    if (title !== undefined) {
+      if (typeof title === 'string') {
+        banner.title = { ...(banner.title || {}), [lang]: title };
+      } else if (typeof title === 'object') {
+        banner.title = { ...(banner.title || {}), ...title };
+      }
+    }
+    
+    if (subtitle !== undefined) {
+      if (typeof subtitle === 'string') {
+        banner.subtitle = { ...(banner.subtitle || {}), [lang]: subtitle };
+      } else if (typeof subtitle === 'object') {
+        banner.subtitle = { ...(banner.subtitle || {}), ...subtitle };
+      }
+    }
+    
+    if (ctaButtonText !== undefined) {
+      if (typeof ctaButtonText === 'string') {
+        banner.ctaButtonText = { ...(banner.ctaButtonText || {}), [lang]: ctaButtonText };
+      } else if (typeof ctaButtonText === 'object') {
+        banner.ctaButtonText = { ...(banner.ctaButtonText || {}), ...ctaButtonText };
+      }
+    }
+    
     if (backgroundImageUrl !== undefined) banner.backgroundImageUrl = backgroundImageUrl;
     if (videoUrl !== undefined) banner.videoUrl = videoUrl;
-    if (ctaButtonText !== undefined) banner.ctaButtonText = ctaButtonText;
     if (ctaButtonLink !== undefined) banner.ctaButtonLink = ctaButtonLink;
     if (order !== undefined) banner.order = order;
     if (isActive !== undefined) banner.isActive = isActive;

@@ -8,27 +8,50 @@ const BlogSchema = new mongoose.Schema({
     required: true,
   },
   title: {
-    type: String,
-    required: [true, 'Blog title is required'],
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   excerpt: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   slug: {
-    type: String,
-    trim: true,
-    unique: true,
-    sparse: true,
+    en: {
+      type: String,
+      trim: true,
+      sparse: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+      sparse: true,
+    },
   },
   featuredImageUrl: {
     type: String,
     trim: true,
   },
   content: {
-    type: String,
-    trim: true,
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
   },
   published: {
     type: Boolean,
@@ -50,10 +73,28 @@ const BlogSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// Validation: At least one language must have a title
+BlogSchema.pre('validate', function(next) {
+  if (!this.title?.en && !this.title?.es) {
+    this.invalidate('title', 'Blog title is required in at least one language');
+  }
+  next();
+});
+
 // Auto-generate slug from title if not provided
 BlogSchema.pre('save', function(next) {
-  if (!this.slug && this.title) {
-    this.slug = this.title
+  // Generate slug for English if not provided
+  if (!this.slug?.en && this.title?.en) {
+    this.slug = this.slug || {};
+    this.slug.en = this.title.en
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+  // Generate slug for Spanish if not provided
+  if (!this.slug?.es && this.title?.es) {
+    this.slug = this.slug || {};
+    this.slug.es = this.title.es
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');

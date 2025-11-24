@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Menu = require('../models/Menu');
 const auth = require('../middleware/auth');
+const getLanguage = require('../middleware/language');
+const { transformByLanguage, transformArrayByLanguage, prepareForSave, mergeTranslations } = require('../utils/languageHelper');
 
 // Create Menu Item (Protected route)
 router.post('/add', auth, async (req, res) => {
@@ -12,6 +14,7 @@ router.post('/add', auth, async (req, res) => {
       visibleOnSite,
       openInNewTab,
       order,
+      lang = 'en', // Language for this creation
     } = req.body;
 
     // Validation
@@ -29,14 +32,19 @@ router.post('/add', auth, async (req, res) => {
       });
     }
 
-    // Create new menu item
-    const menuItem = new Menu({
+    // Prepare data with language support (linkUrl is NOT translatable)
+    const menuData = prepareForSave({
       menuTitle,
-      linkUrl,
       visibleOnSite: visibleOnSite !== undefined ? visibleOnSite : true,
       openInNewTab: openInNewTab !== undefined ? openInNewTab : false,
       order: order !== undefined ? order : 0,
-    });
+    }, lang);
+    
+    // Add linkUrl separately (not translatable - same for all languages)
+    menuData.linkUrl = linkUrl;
+
+    // Create new menu item
+    const menuItem = new Menu(menuData);
 
     await menuItem.save();
 
@@ -64,9 +72,10 @@ router.post('/add', auth, async (req, res) => {
 });
 
 // Get All Menu Items
-router.get('/', async (req, res) => {
+router.get('/', getLanguage, async (req, res) => {
   try {
     const { visibleOnly } = req.query;
+    const language = req.language;
     
     let query = {};
     if (visibleOnly === 'true') {
@@ -75,10 +84,14 @@ router.get('/', async (req, res) => {
 
     const menuItems = await Menu.find(query).sort({ order: 1, createdAt: 1 });
 
+    // Transform data based on requested language
+    const transformed = transformArrayByLanguage(menuItems, language);
+
     res.status(200).json({
       success: true,
       count: menuItems.length,
-      data: menuItems,
+      data: transformed,
+      language,
     });
   } catch (error) {
     console.error('Get menu items error:', error);
@@ -91,9 +104,10 @@ router.get('/', async (req, res) => {
 });
 
 // Get Single Menu Item by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', getLanguage, async (req, res) => {
   try {
     const menuItem = await Menu.findById(req.params.id);
+    const language = req.language;
     
     if (!menuItem) {
       return res.status(404).json({
@@ -102,9 +116,13 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    // Transform data based on requested language
+    const transformed = transformByLanguage(menuItem, language);
+
     res.status(200).json({
       success: true,
-      data: menuItem,
+      data: transformed,
+      language,
     });
   } catch (error) {
     console.error('Get menu item error:', error);
@@ -128,6 +146,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const menuItem = await Menu.findById(req.params.id);
+    const { lang = 'en' } = req.body; // Language for this update
     
     if (!menuItem) {
       return res.status(404).json({
@@ -144,7 +163,23 @@ router.put('/:id', auth, async (req, res) => {
       order,
     } = req.body;
 
-    if (menuTitle !== undefined) menuItem.menuTitle = menuTitle;
+    // Handle language-specific updates
+    if (menuTitle !== undefined) {
+      if (typeof menuTitle === 'string') {
+        // Single string value - update for specified language
+        menuItem.menuTitle = {
+          ...(menuItem.menuTitle || {}),
+          [lang]: menuTitle
+        };
+      } else if (typeof menuTitle === 'object') {
+        // Already in nested format - merge it
+        menuItem.menuTitle = {
+          ...(menuItem.menuTitle || {}),
+          ...menuTitle
+        };
+      }
+    }
+    
     if (linkUrl !== undefined) menuItem.linkUrl = linkUrl;
     if (visibleOnSite !== undefined) menuItem.visibleOnSite = visibleOnSite;
     if (openInNewTab !== undefined) menuItem.openInNewTab = openInNewTab;
