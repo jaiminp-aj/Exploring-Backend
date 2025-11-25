@@ -69,6 +69,11 @@ const BlogSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Menu',
+    default: null,
+  },
 }, {
   timestamps: true,
 });

@@ -99,7 +99,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All What Is Quran
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { publishedOnly } = req.query;
+    const { publishedOnly, allLanguages } = req.query;
     const language = req.language;
     
     let query = {};
@@ -107,16 +107,23 @@ router.get('/', getLanguage, async (req, res) => {
       query.published = true;
     }
 
-    const whatIsQuran = await WhatIsQuran.find(query).sort({ order: 1, createdAt: -1 });
-
-    // Transform data based on requested language
-    const transformed = transformArrayByLanguage(whatIsQuran, language);
+    let whatIsQuran;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript objects without Mongoose transformations
+      whatIsQuran = await WhatIsQuran.find(query).lean().sort({ order: 1, createdAt: -1 });
+      transformed = whatIsQuran;
+    } else {
+      whatIsQuran = await WhatIsQuran.find(query).sort({ order: 1, createdAt: -1 });
+      transformed = transformArrayByLanguage(whatIsQuran, language);
+    }
 
     res.status(200).json({
       success: true,
       count: whatIsQuran.length,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get What Is Quran error:', error);
@@ -131,23 +138,37 @@ router.get('/', getLanguage, async (req, res) => {
 // Get Single What Is Quran by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
-    const whatIsQuran = await WhatIsQuran.findById(req.params.id);
+    const { allLanguages } = req.query;
     const language = req.language;
     
-    if (!whatIsQuran) {
-      return res.status(404).json({
-        success: false,
-        message: 'What Is Quran content not found',
-      });
+    let whatIsQuran;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript object without Mongoose transformations
+      whatIsQuran = await WhatIsQuran.findById(req.params.id).lean();
+      if (!whatIsQuran) {
+        return res.status(404).json({
+          success: false,
+          message: 'What Is Quran content not found',
+        });
+      }
+      transformed = whatIsQuran; // Already a plain object from lean()
+    } else {
+      whatIsQuran = await WhatIsQuran.findById(req.params.id);
+      if (!whatIsQuran) {
+        return res.status(404).json({
+          success: false,
+          message: 'What Is Quran content not found',
+        });
+      }
+      transformed = transformByLanguage(whatIsQuran, language);
     }
-
-    // Transform data based on requested language
-    const transformed = transformByLanguage(whatIsQuran, language);
 
     res.status(200).json({
       success: true,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get What Is Quran error:', error);

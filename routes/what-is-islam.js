@@ -12,8 +12,6 @@ router.post('/add', auth, async (req, res) => {
       videoUrl,
       videoThumbnail,
       description1,
-      description2,
-      description3,
       published,
       order,
     } = req.body;
@@ -33,24 +31,16 @@ router.post('/add', auth, async (req, res) => {
       });
     }
 
-    // Check if descriptions exist (either as string or nested object)
+    // Check if description exists (either as string or nested object)
     const hasDesc1 = description1 && (
       typeof description1 === 'string' || 
       (typeof description1 === 'object' && (description1.en || description1.es))
     );
-    const hasDesc2 = description2 && (
-      typeof description2 === 'string' || 
-      (typeof description2 === 'object' && (description2.en || description2.es))
-    );
-    const hasDesc3 = description3 && (
-      typeof description3 === 'string' || 
-      (typeof description3 === 'object' && (description3.en || description3.es))
-    );
 
-    if (!hasDesc1 || !hasDesc2 || !hasDesc3) {
+    if (!hasDesc1) {
       return res.status(400).json({
         success: false,
-        message: 'All three descriptions are required in at least one language',
+        message: 'Description is required in at least one language',
       });
     }
 
@@ -62,8 +52,6 @@ router.post('/add', auth, async (req, res) => {
       videoUrl,
       videoThumbnail,
       description1,
-      description2,
-      description3,
       published: published !== undefined ? published : true,
       order: order !== undefined ? order : 0,
     }, lang);
@@ -99,7 +87,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All What Is Islam
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { publishedOnly } = req.query;
+    const { publishedOnly, allLanguages } = req.query;
     const language = req.language;
     
     let query = {};
@@ -107,16 +95,23 @@ router.get('/', getLanguage, async (req, res) => {
       query.published = true;
     }
 
-    const whatIsIslam = await WhatIsIslam.find(query).sort({ order: 1, createdAt: -1 });
-
-    // Transform data based on requested language
-    const transformed = transformArrayByLanguage(whatIsIslam, language);
+    let whatIsIslam;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript objects without Mongoose transformations
+      whatIsIslam = await WhatIsIslam.find(query).lean().sort({ order: 1, createdAt: -1 });
+      transformed = whatIsIslam;
+    } else {
+      whatIsIslam = await WhatIsIslam.find(query).sort({ order: 1, createdAt: -1 });
+      transformed = transformArrayByLanguage(whatIsIslam, language);
+    }
 
     res.status(200).json({
       success: true,
       count: whatIsIslam.length,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get What Is Islam error:', error);
@@ -131,23 +126,37 @@ router.get('/', getLanguage, async (req, res) => {
 // Get Single What Is Islam by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
-    const whatIsIslam = await WhatIsIslam.findById(req.params.id);
+    const { allLanguages } = req.query;
     const language = req.language;
     
-    if (!whatIsIslam) {
-      return res.status(404).json({
-        success: false,
-        message: 'What Is Islam content not found',
-      });
+    let whatIsIslam;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript object without Mongoose transformations
+      whatIsIslam = await WhatIsIslam.findById(req.params.id).lean();
+      if (!whatIsIslam) {
+        return res.status(404).json({
+          success: false,
+          message: 'What Is Islam content not found',
+        });
+      }
+      transformed = whatIsIslam; // Already a plain object from lean()
+    } else {
+      whatIsIslam = await WhatIsIslam.findById(req.params.id);
+      if (!whatIsIslam) {
+        return res.status(404).json({
+          success: false,
+          message: 'What Is Islam content not found',
+        });
+      }
+      transformed = transformByLanguage(whatIsIslam, language);
     }
-
-    // Transform data based on requested language
-    const transformed = transformByLanguage(whatIsIslam, language);
 
     res.status(200).json({
       success: true,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get What Is Islam error:', error);
@@ -183,8 +192,6 @@ router.put('/:id', auth, async (req, res) => {
       videoUrl,
       videoThumbnail,
       description1,
-      description2,
-      description3,
       published,
       order,
     } = req.body;
@@ -194,7 +201,7 @@ router.put('/:id', auth, async (req, res) => {
     if (videoUrl !== undefined) whatIsIslam.videoUrl = videoUrl;
     if (videoThumbnail !== undefined) whatIsIslam.videoThumbnail = videoThumbnail;
     
-    // Handle language-specific updates for descriptions
+    // Handle language-specific updates for description
     if (description1 !== undefined) {
       if (typeof description1 === 'object' && (description1.en !== undefined || description1.es !== undefined)) {
         // New format: nested object with en/es keys - merge it
@@ -202,20 +209,6 @@ router.put('/:id', auth, async (req, res) => {
       } else if (typeof description1 === 'string') {
         // Old format: single string value - update for specified language
         whatIsIslam.description1 = { ...(whatIsIslam.description1 || {}), [lang]: description1 };
-      }
-    }
-    if (description2 !== undefined) {
-      if (typeof description2 === 'object' && (description2.en !== undefined || description2.es !== undefined)) {
-        whatIsIslam.description2 = { ...(whatIsIslam.description2 || {}), ...description2 };
-      } else if (typeof description2 === 'string') {
-        whatIsIslam.description2 = { ...(whatIsIslam.description2 || {}), [lang]: description2 };
-      }
-    }
-    if (description3 !== undefined) {
-      if (typeof description3 === 'object' && (description3.en !== undefined || description3.es !== undefined)) {
-        whatIsIslam.description3 = { ...(whatIsIslam.description3 || {}), ...description3 };
-      } else if (typeof description3 === 'string') {
-        whatIsIslam.description3 = { ...(whatIsIslam.description3 || {}), [lang]: description3 };
       }
     }
     

@@ -18,6 +18,7 @@ router.post('/add', auth, async (req, res) => {
       published,
       author,
       tags,
+      categoryId,
     } = req.body;
 
     // Validation - check if title exists (either as string or nested object)
@@ -70,6 +71,7 @@ router.post('/add', auth, async (req, res) => {
       published: published !== undefined ? published : false,
       author,
       tags: tags || [],
+      categoryId: categoryId || null,
     }, lang);
 
     // Create new blog post
@@ -152,12 +154,25 @@ router.get('/', getLanguage, async (req, res) => {
 
     const total = await Blog.countDocuments(query);
 
-    // Transform data based on requested language
-    const transformed = transformArrayByLanguage(blogs, language).map(blog => {
-      // Exclude full content from list view for performance
-      const { content, ...rest } = blog;
-      return rest;
-    });
+    // Check if allLanguages is requested (for admin panel)
+    const { allLanguages } = req.query;
+    let transformed;
+    if (allLanguages === 'true') {
+      // Return full nested language objects (for admin panel)
+      transformed = blogs.map(blog => {
+        const blogObj = blog.toObject();
+        // Exclude full content from list view for performance
+        const { content, ...rest } = blogObj;
+        return rest;
+      });
+    } else {
+      // Transform data based on requested language
+      transformed = transformArrayByLanguage(blogs, language).map(blog => {
+        // Exclude full content from list view for performance
+        const { content, ...rest } = blog;
+        return rest;
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -211,8 +226,11 @@ router.get('/:identifier', getLanguage, async (req, res) => {
     blog.views += 1;
     await blog.save();
 
-    // Transform data based on requested language
-    const transformed = transformByLanguage(blog, language);
+    // Check if allLanguages is requested (for admin panel)
+    const { allLanguages } = req.query;
+    const transformed = allLanguages === 'true' 
+      ? blog.toObject() // Return full nested language objects
+      : transformByLanguage(blog, language);
 
     res.status(200).json({
       success: true,
@@ -260,6 +278,7 @@ router.put('/:id', auth, async (req, res) => {
       published,
       author,
       tags,
+      categoryId,
     } = req.body;
 
     // Check if slug is being updated and if it already exists (for language-specific slugs)
@@ -324,6 +343,7 @@ router.put('/:id', auth, async (req, res) => {
     if (published !== undefined) blog.published = published;
     if (author !== undefined) blog.author = author;
     if (tags !== undefined) blog.tags = tags;
+    if (categoryId !== undefined) blog.categoryId = categoryId || null;
 
     await blog.save();
 

@@ -68,7 +68,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All Basics
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { publishedOnly } = req.query;
+    const { publishedOnly, allLanguages } = req.query;
     const language = req.language;
     
     let query = {};
@@ -76,16 +76,23 @@ router.get('/', getLanguage, async (req, res) => {
       query.published = true;
     }
 
-    const basics = await Basics.find(query).sort({ order: 1, createdAt: -1 });
-
-    // Transform data based on requested language
-    const transformed = transformArrayByLanguage(basics, language);
+    let basics;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript objects without Mongoose transformations
+      basics = await Basics.find(query).lean().sort({ order: 1, createdAt: -1 });
+      transformed = basics;
+    } else {
+      basics = await Basics.find(query).sort({ order: 1, createdAt: -1 });
+      transformed = transformArrayByLanguage(basics, language);
+    }
 
     res.status(200).json({
       success: true,
       count: basics.length,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get Basics error:', error);
@@ -100,23 +107,37 @@ router.get('/', getLanguage, async (req, res) => {
 // Get Single Basics by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
-    const basics = await Basics.findById(req.params.id);
+    const { allLanguages } = req.query;
     const language = req.language;
     
-    if (!basics) {
-      return res.status(404).json({
-        success: false,
-        message: 'Basics content not found',
-      });
+    let basics;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript object without Mongoose transformations
+      basics = await Basics.findById(req.params.id).lean();
+      if (!basics) {
+        return res.status(404).json({
+          success: false,
+          message: 'Basics content not found',
+        });
+      }
+      transformed = basics; // Already a plain object from lean()
+    } else {
+      basics = await Basics.findById(req.params.id);
+      if (!basics) {
+        return res.status(404).json({
+          success: false,
+          message: 'Basics content not found',
+        });
+      }
+      transformed = transformByLanguage(basics, language);
     }
-
-    // Transform data based on requested language
-    const transformed = transformByLanguage(basics, language);
 
     res.status(200).json({
       success: true,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get Basics error:', error);

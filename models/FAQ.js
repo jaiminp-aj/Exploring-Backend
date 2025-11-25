@@ -1,16 +1,6 @@
 const mongoose = require('mongoose');
 
 const FAQSchema = new mongoose.Schema({
-  description: {
-    en: {
-      type: String,
-      trim: true,
-    },
-    es: {
-      type: String,
-      trim: true,
-    },
-  },
   content: [{
     title: {
       en: {
@@ -45,11 +35,38 @@ const FAQSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Validation: At least one language must have a description
+// Validation: At least one content item must exist and have valid data
 FAQSchema.pre('validate', function(next) {
-  if (!this.description?.en && !this.description?.es) {
-    this.invalidate('description', 'FAQ description is required in at least one language');
+  if (!this.content || this.content.length === 0) {
+    this.invalidate('content', 'FAQ must have at least one content item');
+    return next(new Error('FAQ must have at least one content item'));
   }
+  
+  // Validate each content item
+  for (const item of this.content) {
+    // Check if title exists in at least one language
+    const hasTitle = (item.title && (
+      (item.title.en && item.title.en.trim()) || 
+      (item.title.es && item.title.es.trim())
+    ));
+    
+    // Check if description exists in at least one language
+    const hasDescription = (item.description && (
+      (item.description.en && item.description.en.trim()) || 
+      (item.description.es && item.description.es.trim())
+    ));
+    
+    if (!hasTitle) {
+      this.invalidate('content', 'FAQ content title is required in at least one language');
+      return next(new Error('FAQ content title is required in at least one language'));
+    }
+    
+    if (!hasDescription) {
+      this.invalidate('content', 'FAQ content description is required in at least one language');
+      return next(new Error('FAQ content description is required in at least one language'));
+    }
+  }
+  
   next();
 });
 

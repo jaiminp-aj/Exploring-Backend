@@ -9,34 +9,77 @@ const { transformByLanguage, transformArrayByLanguage, prepareForSave } = requir
 router.post('/add', auth, async (req, res) => {
   try {
     const {
-      description,
       content,
       published,
       order,
       lang = 'en', // For backward compatibility
     } = req.body;
 
-    // Validation - check if description exists (either as string or nested object)
-    const hasDescription = description && (
-      typeof description === 'string' || 
-      (typeof description === 'object' && (description.en || description.es))
-    );
-    
-    if (!hasDescription) {
+    // Validation - check if content array exists and has at least one item
+    if (!content || !Array.isArray(content) || content.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'FAQ description is required in at least one language',
+        message: 'FAQ must have at least one content item',
       });
     }
 
-    // Prepare data with language support
-    // prepareForSave handles both nested objects and flat strings
-    const faqData = prepareForSave({
-      description,
-      content: content || [],
+    // Validate that each content item has at least a title and description in one language
+    const validContent = content.filter((item) => {
+      const hasTitle = item.title && (
+        typeof item.title === 'string' || 
+        (typeof item.title === 'object' && (item.title.en || item.title.es))
+      );
+      const hasDescription = item.description && (
+        typeof item.description === 'string' || 
+        (typeof item.description === 'object' && (item.description.en || item.description.es))
+      );
+      return hasTitle && hasDescription;
+    });
+
+    if (validContent.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Each FAQ item must have both title and description in at least one language',
+      });
+    }
+
+    // Prepare data with language support - ensure proper format
+    const faqData = {
+      content: validContent.map((item) => {
+        // Ensure title is in correct format - only include languages with content
+        let titleObj = {};
+        if (typeof item.title === 'object' && item.title !== null) {
+          if (item.title.en && item.title.en.trim()) {
+            titleObj.en = item.title.en.trim();
+          }
+          if (item.title.es && item.title.es.trim()) {
+            titleObj.es = item.title.es.trim();
+          }
+        } else if (typeof item.title === 'string' && item.title.trim()) {
+          titleObj[lang] = item.title.trim();
+        }
+
+        // Ensure description is in correct format - only include languages with content
+        let descriptionObj = {};
+        if (typeof item.description === 'object' && item.description !== null) {
+          if (item.description.en && item.description.en.trim()) {
+            descriptionObj.en = item.description.en.trim();
+          }
+          if (item.description.es && item.description.es.trim()) {
+            descriptionObj.es = item.description.es.trim();
+          }
+        } else if (typeof item.description === 'string' && item.description.trim()) {
+          descriptionObj[lang] = item.description.trim();
+        }
+
+        return {
+          title: titleObj,
+          description: descriptionObj,
+        };
+      }),
       published: published !== undefined ? published : true,
       order: order !== undefined ? order : 0,
-    }, lang);
+    };
 
     // Create new FAQ
     const faq = new FAQ(faqData);
@@ -69,7 +112,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All FAQs
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { publishedOnly } = req.query;
+    const { publishedOnly, allLanguages } = req.query;
     const language = req.language;
     
     let query = {};
@@ -78,6 +121,17 @@ router.get('/', getLanguage, async (req, res) => {
     }
 
     const faqs = await FAQ.find(query).sort({ order: 1, createdAt: -1 });
+
+    // If allLanguages is true, return full nested objects without transformation
+    if (allLanguages === 'true') {
+      const plainFAQs = faqs.map(faq => faq.toObject ? faq.toObject() : faq);
+      return res.status(200).json({
+        success: true,
+        count: faqs.length,
+        data: plainFAQs,
+        language: 'all',
+      });
+    }
 
     // Transform data based on requested language
     const transformed = transformArrayByLanguage(faqs, language);
@@ -101,6 +155,7 @@ router.get('/', getLanguage, async (req, res) => {
 // Get Single FAQ by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
+    const { allLanguages } = req.query;
     const faq = await FAQ.findById(req.params.id);
     const language = req.language;
     
@@ -108,6 +163,16 @@ router.get('/:id', getLanguage, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'FAQ not found',
+      });
+    }
+
+    // If allLanguages is true, return full nested objects without transformation
+    if (allLanguages === 'true') {
+      const plainFAQ = faq.toObject ? faq.toObject() : faq;
+      return res.status(200).json({
+        success: true,
+        data: plainFAQ,
+        language: 'all',
       });
     }
 
@@ -151,42 +216,55 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     const {
-      description,
       content,
       published,
       order,
     } = req.body;
 
-    // Handle language-specific updates
-    if (description !== undefined) {
-      if (typeof description === 'object' && (description.en !== undefined || description.es !== undefined)) {
-        // New format: nested object with en/es keys - merge it
-        faq.description = { ...(faq.description || {}), ...description };
-      } else if (typeof description === 'string') {
-        // Old format: single string value - update for specified language
-        faq.description = { ...(faq.description || {}), [lang]: description };
+    // Validate content if provided
+    if (content !== undefined) {
+      if (!Array.isArray(content) || content.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'FAQ must have at least one content item',
+        });
       }
-    }
-    
-    if (content !== undefined && Array.isArray(content)) {
-      faq.content = content.map(item => {
-        const newItem = { ...item };
+
+      // Validate that each content item has at least a title and description in one language
+      const validContent = content.filter((item) => {
+        const hasTitle = item.title && (
+          typeof item.title === 'string' || 
+          (typeof item.title === 'object' && (item.title.en || item.title.es))
+        );
+        const hasDescription = item.description && (
+          typeof item.description === 'string' || 
+          (typeof item.description === 'object' && (item.description.en || item.description.es))
+        );
+        return hasTitle && hasDescription;
+      });
+
+      if (validContent.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Each FAQ item must have both title and description in at least one language',
+        });
+      }
+
+      // Transform content to ensure proper format
+      faq.content = validContent.map(item => {
+        const newItem = {};
         if (item.title) {
           if (typeof item.title === 'object' && (item.title.en !== undefined || item.title.es !== undefined)) {
-            // New format: nested object
-            newItem.title = { ...(newItem.title || {}), ...item.title };
+            newItem.title = item.title;
           } else if (typeof item.title === 'string') {
-            // Old format: single string
-            newItem.title = { ...(newItem.title || {}), [lang]: item.title };
+            newItem.title = { [lang]: item.title };
           }
         }
         if (item.description) {
           if (typeof item.description === 'object' && (item.description.en !== undefined || item.description.es !== undefined)) {
-            // New format: nested object
-            newItem.description = { ...(newItem.description || {}), ...item.description };
+            newItem.description = item.description;
           } else if (typeof item.description === 'string') {
-            // Old format: single string
-            newItem.description = { ...(newItem.description || {}), [lang]: item.description };
+            newItem.description = { [lang]: item.description };
           }
         }
         return newItem;

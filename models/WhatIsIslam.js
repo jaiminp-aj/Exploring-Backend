@@ -21,26 +21,6 @@ const WhatIsIslamSchema = new mongoose.Schema({
       trim: true,
     },
   },
-  description2: {
-    en: {
-      type: String,
-      trim: true,
-    },
-    es: {
-      type: String,
-      trim: true,
-    },
-  },
-  description3: {
-    en: {
-      type: String,
-      trim: true,
-    },
-    es: {
-      type: String,
-      trim: true,
-    },
-  },
   published: {
     type: Boolean,
     default: true,
@@ -53,12 +33,10 @@ const WhatIsIslamSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Validation: At least one language must have descriptions
+// Validation: At least one language must have description
 WhatIsIslamSchema.pre('validate', function(next) {
-  if ((!this.description1?.en && !this.description1?.es) ||
-      (!this.description2?.en && !this.description2?.es) ||
-      (!this.description3?.en && !this.description3?.es)) {
-    this.invalidate('description', 'All descriptions are required in at least one language');
+  if (!this.description1?.en && !this.description1?.es) {
+    this.invalidate('description1', 'Description is required in at least one language');
   }
   next();
 });
