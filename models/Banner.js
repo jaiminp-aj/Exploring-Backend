@@ -21,7 +21,11 @@ const BannerSchema = new mongoose.Schema({
       trim: true,
     },
   },
-  backgroundImageUrl: {
+  desktopBackgroundImageUrl: {
+    type: String,
+    trim: true,
+  },
+  mobileBackgroundImageUrl: {
     type: String,
     trim: true,
   },

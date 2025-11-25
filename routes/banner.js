@@ -11,7 +11,9 @@ router.post('/add', auth, async (req, res) => {
     const {
       title,
       subtitle,
-      backgroundImageUrl,
+      desktopBackgroundImageUrl,
+      mobileBackgroundImageUrl,
+      backgroundImageUrl, // For backward compatibility
       videoUrl,
       ctaButtonText,
       ctaButtonLink,
@@ -38,7 +40,8 @@ router.post('/add', auth, async (req, res) => {
     const bannerData = prepareForSave({
       title,
       subtitle,
-      backgroundImageUrl,
+      desktopBackgroundImageUrl: desktopBackgroundImageUrl || backgroundImageUrl, // Support both new and old field names
+      mobileBackgroundImageUrl,
       videoUrl,
       ctaButtonText,
       ctaButtonLink,
@@ -77,7 +80,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All Banners
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { activeOnly } = req.query;
+    const { activeOnly, allLanguages } = req.query;
     const language = req.language;
     
     let query = {};
@@ -85,16 +88,24 @@ router.get('/', getLanguage, async (req, res) => {
       query.isActive = true;
     }
 
-    const banners = await Banner.find(query).sort({ order: 1, createdAt: -1 });
-
-    // Transform data based on requested language
-    const transformed = transformArrayByLanguage(banners, language);
+    let banners;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript objects without Mongoose transformations
+      // This ensures nested language objects are preserved exactly as stored
+      banners = await Banner.find(query).lean().sort({ order: 1, createdAt: -1 });
+      transformed = banners;
+    } else {
+      banners = await Banner.find(query).sort({ order: 1, createdAt: -1 });
+      transformed = transformArrayByLanguage(banners, language);
+    }
 
     res.status(200).json({
       success: true,
       count: banners.length,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get banners error:', error);
@@ -109,23 +120,37 @@ router.get('/', getLanguage, async (req, res) => {
 // Get Single Banner by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
-    const banner = await Banner.findById(req.params.id);
+    const { allLanguages } = req.query;
     const language = req.language;
     
-    if (!banner) {
-      return res.status(404).json({
-        success: false,
-        message: 'Banner not found',
-      });
+    let banner;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript object without Mongoose transformations
+      banner = await Banner.findById(req.params.id).lean();
+      if (!banner) {
+        return res.status(404).json({
+          success: false,
+          message: 'Banner not found',
+        });
+      }
+      transformed = banner; // Already a plain object from lean()
+    } else {
+      banner = await Banner.findById(req.params.id);
+      if (!banner) {
+        return res.status(404).json({
+          success: false,
+          message: 'Banner not found',
+        });
+      }
+      transformed = transformByLanguage(banner, language);
     }
-
-    // Transform data based on requested language
-    const transformed = transformByLanguage(banner, language);
 
     res.status(200).json({
       success: true,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get banner error:', error);
@@ -161,7 +186,9 @@ router.put('/:id', auth, async (req, res) => {
     const {
       title,
       subtitle,
-      backgroundImageUrl,
+      desktopBackgroundImageUrl,
+      mobileBackgroundImageUrl,
+      backgroundImageUrl, // For backward compatibility
       videoUrl,
       ctaButtonText,
       ctaButtonLink,
@@ -196,7 +223,14 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
     
-    if (backgroundImageUrl !== undefined) banner.backgroundImageUrl = backgroundImageUrl;
+    // Handle desktop background image (support both new and old field names)
+    if (desktopBackgroundImageUrl !== undefined) {
+      banner.desktopBackgroundImageUrl = desktopBackgroundImageUrl;
+    } else if (backgroundImageUrl !== undefined) {
+      // Backward compatibility: if old field name is used, set desktop image
+      banner.desktopBackgroundImageUrl = backgroundImageUrl;
+    }
+    if (mobileBackgroundImageUrl !== undefined) banner.mobileBackgroundImageUrl = mobileBackgroundImageUrl;
     if (videoUrl !== undefined) banner.videoUrl = videoUrl;
     if (ctaButtonLink !== undefined) banner.ctaButtonLink = ctaButtonLink;
     if (order !== undefined) banner.order = order;

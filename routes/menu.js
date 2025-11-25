@@ -85,7 +85,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All Menu Items
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { visibleOnly } = req.query;
+    const { visibleOnly, allLanguages } = req.query;
     const language = req.language;
     
     let query = {};
@@ -93,16 +93,24 @@ router.get('/', getLanguage, async (req, res) => {
       query.visibleOnSite = true;
     }
 
-    const menuItems = await Menu.find(query).sort({ order: 1, createdAt: 1 });
-
-    // Transform data based on requested language
-    const transformed = transformArrayByLanguage(menuItems, language);
+    let menuItems;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript objects without Mongoose transformations
+      // This ensures nested language objects are preserved exactly as stored
+      menuItems = await Menu.find(query).lean().sort({ order: 1, createdAt: 1 });
+      transformed = menuItems;
+    } else {
+      menuItems = await Menu.find(query).sort({ order: 1, createdAt: 1 });
+      transformed = transformArrayByLanguage(menuItems, language);
+    }
 
     res.status(200).json({
       success: true,
       count: menuItems.length,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get menu items error:', error);
@@ -117,23 +125,37 @@ router.get('/', getLanguage, async (req, res) => {
 // Get Single Menu Item by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
-    const menuItem = await Menu.findById(req.params.id);
+    const { allLanguages } = req.query;
     const language = req.language;
     
-    if (!menuItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Menu item not found',
-      });
+    let menuItem;
+    let transformed;
+    
+    if (allLanguages === 'true') {
+      // Use lean() to get plain JavaScript object without Mongoose transformations
+      menuItem = await Menu.findById(req.params.id).lean();
+      if (!menuItem) {
+        return res.status(404).json({
+          success: false,
+          message: 'Menu item not found',
+        });
+      }
+      transformed = menuItem; // Already a plain object from lean()
+    } else {
+      menuItem = await Menu.findById(req.params.id);
+      if (!menuItem) {
+        return res.status(404).json({
+          success: false,
+          message: 'Menu item not found',
+        });
+      }
+      transformed = transformByLanguage(menuItem, language);
     }
-
-    // Transform data based on requested language
-    const transformed = transformByLanguage(menuItem, language);
 
     res.status(200).json({
       success: true,
       data: transformed,
-      language,
+      language: allLanguages === 'true' ? 'all' : language,
     });
   } catch (error) {
     console.error('Get menu item error:', error);
