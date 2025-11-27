@@ -1,28 +1,26 @@
 const mongoose = require('mongoose');
 
 const FAQSchema = new mongoose.Schema({
-  content: [{
-    title: {
-      en: {
-        type: String,
-        trim: true,
-      },
-      es: {
-        type: String,
-        trim: true,
-      },
+  title: {
+    en: {
+      type: String,
+      trim: true,
     },
-    description: {
-      en: {
-        type: String,
-        trim: true,
-      },
-      es: {
-        type: String,
-        trim: true,
-      },
+    es: {
+      type: String,
+      trim: true,
     },
-  }],
+  },
+  description: {
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
+  },
   published: {
     type: Boolean,
     default: true,
@@ -35,36 +33,28 @@ const FAQSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Validation: At least one content item must exist and have valid data
+// Validation: At least one language must have a title and description
 FAQSchema.pre('validate', function(next) {
-  if (!this.content || this.content.length === 0) {
-    this.invalidate('content', 'FAQ must have at least one content item');
-    return next(new Error('FAQ must have at least one content item'));
+  // Check if title exists in at least one language
+  const hasTitle = (this.title && (
+    (this.title.en && this.title.en.trim()) || 
+    (this.title.es && this.title.es.trim())
+  ));
+  
+  // Check if description exists in at least one language
+  const hasDescription = (this.description && (
+    (this.description.en && this.description.en.trim()) || 
+    (this.description.es && this.description.es.trim())
+  ));
+  
+  if (!hasTitle) {
+    this.invalidate('title', 'FAQ title is required in at least one language');
+    return next(new Error('FAQ title is required in at least one language'));
   }
   
-  // Validate each content item
-  for (const item of this.content) {
-    // Check if title exists in at least one language
-    const hasTitle = (item.title && (
-      (item.title.en && item.title.en.trim()) || 
-      (item.title.es && item.title.es.trim())
-    ));
-    
-    // Check if description exists in at least one language
-    const hasDescription = (item.description && (
-      (item.description.en && item.description.en.trim()) || 
-      (item.description.es && item.description.es.trim())
-    ));
-    
-    if (!hasTitle) {
-      this.invalidate('content', 'FAQ content title is required in at least one language');
-      return next(new Error('FAQ content title is required in at least one language'));
-    }
-    
-    if (!hasDescription) {
-      this.invalidate('content', 'FAQ content description is required in at least one language');
-      return next(new Error('FAQ content description is required in at least one language'));
-    }
+  if (!hasDescription) {
+    this.invalidate('description', 'FAQ description is required in at least one language');
+    return next(new Error('FAQ description is required in at least one language'));
   }
   
   next();

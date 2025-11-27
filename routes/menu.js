@@ -191,6 +191,47 @@ router.get('/', getLanguage, async (req, res) => {
   }
 });
 
+// Update Menu Order (Bulk update) - Protected route
+// This must come before /:id route to avoid matching "order" as an ID
+router.put('/order/update', auth, async (req, res) => {
+  try {
+    const { menuOrders } = req.body; // Array of { id, order }
+    
+    if (!Array.isArray(menuOrders) || menuOrders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'menuOrders must be a non-empty array',
+      });
+    }
+
+    // Update all menu items in parallel
+    const updatePromises = menuOrders.map(({ id, order }) => {
+      if (!id || order === undefined) {
+        return Promise.resolve(null);
+      }
+      return Menu.findByIdAndUpdate(
+        id,
+        { order: parseInt(order, 10) },
+        { new: true }
+      );
+    });
+
+    await Promise.all(updatePromises);
+
+    res.status(200).json({
+      success: true,
+      message: 'Menu order updated successfully',
+    });
+  } catch (error) {
+    console.error('Update menu order error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
+  }
+});
+
 // Get Single Menu Item by ID
 router.get('/:id', getLanguage, async (req, res) => {
   try {
