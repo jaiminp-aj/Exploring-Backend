@@ -19,6 +19,7 @@ router.post('/add', auth, async (req, res) => {
       ctaButtonLink,
       order,
       isActive,
+      categoryId,
       lang = 'en', // For backward compatibility
     } = req.body;
 
@@ -48,6 +49,11 @@ router.post('/add', auth, async (req, res) => {
       order: order !== undefined ? order : 0,
       isActive: isActive !== undefined ? isActive : true,
     }, lang);
+    
+    // Add categoryId if provided
+    if (categoryId) {
+      bannerData.categoryId = categoryId;
+    }
 
     // Create new banner
     const banner = new Banner(bannerData);
@@ -80,12 +86,15 @@ router.post('/add', auth, async (req, res) => {
 // Get All Banners
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { activeOnly, allLanguages } = req.query;
+    const { activeOnly, allLanguages, categoryId } = req.query;
     const language = req.language;
     
     let query = {};
     if (activeOnly === 'true') {
       query.isActive = true;
+    }
+    if (categoryId) {
+      query.categoryId = categoryId;
     }
 
     let banners;
@@ -194,6 +203,7 @@ router.put('/:id', auth, async (req, res) => {
       ctaButtonLink,
       order,
       isActive,
+      categoryId,
     } = req.body;
 
     // Handle language-specific updates for translatable fields
@@ -235,6 +245,9 @@ router.put('/:id', auth, async (req, res) => {
     if (ctaButtonLink !== undefined) banner.ctaButtonLink = ctaButtonLink;
     if (order !== undefined) banner.order = order;
     if (isActive !== undefined) banner.isActive = isActive;
+    if (categoryId !== undefined) {
+      banner.categoryId = categoryId || null;
+    }
 
     await banner.save();
 

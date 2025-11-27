@@ -55,6 +55,11 @@ const BannerSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Menu',
+    default: null,
+  },
 }, {
   timestamps: true,
 });

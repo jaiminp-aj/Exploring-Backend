@@ -14,6 +14,7 @@ router.post('/add', auth, async (req, res) => {
       excerpt,
       slug,
       featuredImageUrl,
+      videoUrl,
       content,
       published,
       author,
@@ -36,27 +37,60 @@ router.post('/add', auth, async (req, res) => {
 
     const { lang = 'en' } = req.body; // For backward compatibility
     
-    // Check if slug already exists (if provided) - check both languages
+    // Helper function to generate unique slug
+    const generateUniqueSlug = async (baseSlug, language, excludeId = null) => {
+      let uniqueSlug = baseSlug;
+      let counter = 1;
+      let exists = true;
+      
+      while (exists) {
+        const query = { [`slug.${language}`]: uniqueSlug };
+        if (excludeId) {
+          query._id = { $ne: excludeId };
+        }
+        const existing = await Blog.findOne(query);
+        if (!existing) {
+          exists = false;
+        } else {
+          uniqueSlug = `${baseSlug}-${counter}`;
+          counter++;
+        }
+      }
+      return uniqueSlug;
+    };
+    
+    // Check if slug already exists (if provided) - auto-generate unique slug if duplicate
+    let finalSlug = slug;
     if (slug) {
       const slugToCheck = typeof slug === 'object' && (slug.en || slug.es) 
         ? slug 
         : { [lang]: slug };
-      const slugQuery = {};
-      if (slugToCheck.en) slugQuery['slug.en'] = slugToCheck.en;
-      if (slugToCheck.es) slugQuery['slug.es'] = slugToCheck.es;
       
-      if (Object.keys(slugQuery).length > 0) {
+      // Check and fix English slug if provided
+      if (slugToCheck.en) {
         const existingBlog = await Blog.findOne({ 
-          _id: { $ne: req.body._id }, // Exclude current blog if updating
-          $or: Object.entries(slugQuery).map(([k, v]) => ({ [k]: v })) 
+          _id: { $ne: req.body._id },
+          'slug.en': slugToCheck.en
         });
         if (existingBlog) {
-          return res.status(400).json({
-            success: false,
-            message: 'Slug already exists. Please use a different slug.',
-          });
+          // Auto-generate unique slug
+          slugToCheck.en = await generateUniqueSlug(slugToCheck.en, 'en', req.body._id);
         }
       }
+      
+      // Check and fix Spanish slug if provided
+      if (slugToCheck.es) {
+        const existingBlog = await Blog.findOne({ 
+          _id: { $ne: req.body._id },
+          'slug.es': slugToCheck.es
+        });
+        if (existingBlog) {
+          // Auto-generate unique slug
+          slugToCheck.es = await generateUniqueSlug(slugToCheck.es, 'es', req.body._id);
+        }
+      }
+      
+      finalSlug = slugToCheck;
     }
 
     // Prepare data with language support
@@ -64,15 +98,22 @@ router.post('/add', auth, async (req, res) => {
     const blogData = prepareForSave({
       contentType: contentType || 'Blog Post',
       title,
-      excerpt,
-      slug,
-      featuredImageUrl,
-      content,
+      excerpt: excerpt || { en: '', es: '' },
+      slug: finalSlug,
+      content: content || { en: '', es: '' },
       published: published !== undefined ? published : false,
       author,
       tags: tags || [],
       categoryId: categoryId || null,
     }, lang);
+
+    // Add non-translatable fields after prepareForSave (these are not processed by prepareForSave)
+    if (featuredImageUrl !== undefined && featuredImageUrl !== null && featuredImageUrl !== '') {
+      blogData.featuredImageUrl = featuredImageUrl;
+    }
+    if (videoUrl !== undefined && videoUrl !== null && videoUrl !== '') {
+      blogData.videoUrl = videoUrl;
+    }
 
     // Create new blog post
     const blog = new Blog(blogData);
@@ -86,11 +127,18 @@ router.post('/add', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Blog creation error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      errors: error.errors,
+      code: error.code,
+    });
     
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         success: false,
         message: Object.values(error.errors).map(err => err.message).join(', '),
+        errors: error.errors,
       });
     }
 
@@ -117,11 +165,16 @@ router.get('/', getLanguage, async (req, res) => {
       contentType, 
       author,
       tag,
+      categoryId,
       page = 1,
       limit = 10,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder
     } = req.query;
+    
+    // Default sort order: Videos in ascending, Blog Posts in descending
+    const defaultSortOrder = contentType === 'Video' ? 'asc' : 'desc';
+    const finalSortOrder = sortOrder || defaultSortOrder;
     const language = req.language;
     
     let query = {};
@@ -141,9 +194,13 @@ router.get('/', getLanguage, async (req, res) => {
     if (tag) {
       query.tags = tag;
     }
+    
+    if (categoryId) {
+      query.categoryId = categoryId;
+    }
 
     const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+    sortOptions[sortBy] = finalSortOrder === 'asc' ? 1 : -1;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -274,6 +331,7 @@ router.put('/:id', auth, async (req, res) => {
       excerpt,
       slug,
       featuredImageUrl,
+      videoUrl,
       content,
       published,
       author,
@@ -281,25 +339,58 @@ router.put('/:id', auth, async (req, res) => {
       categoryId,
     } = req.body;
 
-    // Check if slug is being updated and if it already exists (for language-specific slugs)
-    if (slug) {
-      const slugToCheck = typeof slug === 'string' ? { [lang]: slug } : slug;
-      const slugQuery = {};
-      if (slugToCheck.en) slugQuery['slug.en'] = slugToCheck.en;
-      if (slugToCheck.es) slugQuery['slug.es'] = slugToCheck.es;
+    // Helper function to generate unique slug
+    const generateUniqueSlug = async (baseSlug, language, excludeId = null) => {
+      let uniqueSlug = baseSlug;
+      let counter = 1;
+      let exists = true;
       
-      if (Object.keys(slugQuery).length > 0) {
-        const existingBlog = await Blog.findOne({
-          _id: { $ne: blog._id },
-          $or: Object.entries(slugQuery).map(([k, v]) => ({ [k]: v }))
-        });
-        if (existingBlog) {
-          return res.status(400).json({
-            success: false,
-            message: 'Slug already exists. Please use a different slug.',
-          });
+      while (exists) {
+        const query = { [`slug.${language}`]: uniqueSlug };
+        if (excludeId) {
+          query._id = { $ne: excludeId };
+        }
+        const existing = await Blog.findOne(query);
+        if (!existing) {
+          exists = false;
+        } else {
+          uniqueSlug = `${baseSlug}-${counter}`;
+          counter++;
         }
       }
+      return uniqueSlug;
+    };
+    
+    // Check if slug is being updated and auto-generate unique slug if duplicate
+    let finalSlug = slug;
+    if (slug) {
+      const slugToCheck = typeof slug === 'string' ? { [lang]: slug } : slug;
+      
+      // Check and fix English slug if provided
+      if (slugToCheck.en) {
+        const existingBlog = await Blog.findOne({
+          _id: { $ne: blog._id },
+          'slug.en': slugToCheck.en
+        });
+        if (existingBlog) {
+          // Auto-generate unique slug
+          slugToCheck.en = await generateUniqueSlug(slugToCheck.en, 'en', blog._id);
+        }
+      }
+      
+      // Check and fix Spanish slug if provided
+      if (slugToCheck.es) {
+        const existingBlog = await Blog.findOne({
+          _id: { $ne: blog._id },
+          'slug.es': slugToCheck.es
+        });
+        if (existingBlog) {
+          // Auto-generate unique slug
+          slugToCheck.es = await generateUniqueSlug(slugToCheck.es, 'es', blog._id);
+        }
+      }
+      
+      finalSlug = slugToCheck;
     }
 
     if (contentType !== undefined) blog.contentType = contentType;
@@ -323,11 +414,11 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
     
-    if (slug !== undefined) {
-      if (typeof slug === 'object' && (slug.en !== undefined || slug.es !== undefined)) {
-        blog.slug = { ...(blog.slug || {}), ...slug };
-      } else if (typeof slug === 'string') {
-        blog.slug = { ...(blog.slug || {}), [lang]: slug };
+    if (finalSlug !== undefined) {
+      if (typeof finalSlug === 'object' && (finalSlug.en !== undefined || finalSlug.es !== undefined)) {
+        blog.slug = { ...(blog.slug || {}), ...finalSlug };
+      } else if (typeof finalSlug === 'string') {
+        blog.slug = { ...(blog.slug || {}), [lang]: finalSlug };
       }
     }
     
@@ -340,6 +431,7 @@ router.put('/:id', auth, async (req, res) => {
     }
     
     if (featuredImageUrl !== undefined) blog.featuredImageUrl = featuredImageUrl;
+    if (videoUrl !== undefined) blog.videoUrl = videoUrl;
     if (published !== undefined) blog.published = published;
     if (author !== undefined) blog.author = author;
     if (tags !== undefined) blog.tags = tags;

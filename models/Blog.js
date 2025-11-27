@@ -43,6 +43,10 @@ const BlogSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  videoUrl: {
+    type: String,
+    trim: true,
+  },
   content: {
     en: {
       type: String,
