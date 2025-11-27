@@ -14,6 +14,8 @@ router.post('/add', auth, async (req, res) => {
       visibleOnSite,
       openInNewTab,
       order,
+      parentMenuId,
+      parentId, // Support both parentMenuId and parentId for backward compatibility
       lang = 'en', // For backward compatibility
     } = req.body;
 
@@ -37,6 +39,20 @@ router.post('/add', auth, async (req, res) => {
       });
     }
 
+    // Handle parentMenuId (support both parentMenuId and parentId)
+    const finalParentMenuId = parentMenuId || parentId || null;
+    
+    // Validate parentMenuId if provided
+    if (finalParentMenuId) {
+      const parentExists = await Menu.findById(finalParentMenuId);
+      if (!parentExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'Parent menu item not found',
+        });
+      }
+    }
+
     // Prepare data with language support (linkUrl is NOT translatable)
     // prepareForSave handles both nested objects and flat strings
     const menuData = prepareForSave({
@@ -48,6 +64,11 @@ router.post('/add', auth, async (req, res) => {
     
     // Add linkUrl separately (not translatable - same for all languages)
     menuData.linkUrl = linkUrl;
+    
+    // Add parentMenuId if provided
+    if (finalParentMenuId) {
+      menuData.parentMenuId = finalParentMenuId;
+    }
 
     // Ensure menuTitle is a plain object (not a Mongoose document or special object)
     if (menuData.menuTitle && typeof menuData.menuTitle === 'object') {
@@ -85,7 +106,7 @@ router.post('/add', auth, async (req, res) => {
 // Get All Menu Items
 router.get('/', getLanguage, async (req, res) => {
   try {
-    const { visibleOnly, allLanguages } = req.query;
+    const { visibleOnly, allLanguages, nested } = req.query;
     const language = req.language;
     
     let query = {};
@@ -104,6 +125,54 @@ router.get('/', getLanguage, async (req, res) => {
     } else {
       menuItems = await Menu.find(query).sort({ order: 1, createdAt: 1 });
       transformed = transformArrayByLanguage(menuItems, language);
+    }
+
+    // If nested=true, organize menu items hierarchically
+    if (nested === 'true') {
+      const menuMap = new Map();
+      const rootItems = [];
+
+      // First pass: create map of all items
+      transformed.forEach(item => {
+        const itemId = item._id?.toString() || item.id?.toString();
+        menuMap.set(itemId, {
+          ...item,
+          children: [],
+        });
+      });
+
+      // Second pass: build hierarchy
+      transformed.forEach(item => {
+        const itemId = item._id?.toString() || item.id?.toString();
+        const parentId = item.parentMenuId?.toString() || item.parentId?.toString();
+        
+        if (parentId && menuMap.has(parentId)) {
+          // Add to parent's children
+          menuMap.get(parentId).children.push(menuMap.get(itemId));
+        } else {
+          // Root level item
+          rootItems.push(menuMap.get(itemId));
+        }
+      });
+
+      // Sort children recursively
+      const sortRecursive = (items) => {
+        items.sort((a, b) => (a.order || 0) - (b.order || 0));
+        items.forEach(item => {
+          if (item.children && item.children.length > 0) {
+            sortRecursive(item.children);
+          }
+        });
+      };
+      sortRecursive(rootItems);
+
+      transformed = rootItems;
+    } else {
+      // Include parentMenuId in flat structure for backward compatibility
+      transformed = transformed.map(item => ({
+        ...item,
+        parentMenuId: item.parentMenuId || item.parentId || null,
+      }));
     }
 
     res.status(200).json({
@@ -194,6 +263,8 @@ router.put('/:id', auth, async (req, res) => {
       visibleOnSite,
       openInNewTab,
       order,
+      parentMenuId,
+      parentId, // Support both parentMenuId and parentId for backward compatibility
     } = req.body;
 
     // Handle language-specific updates
@@ -210,6 +281,33 @@ router.put('/:id', auth, async (req, res) => {
           ...(menuItem.menuTitle || {}),
           [lang]: menuTitle
         };
+      }
+    }
+    
+    // Handle parentMenuId update
+    const finalParentMenuId = parentMenuId !== undefined ? parentMenuId : (parentId !== undefined ? parentId : undefined);
+    
+    if (finalParentMenuId !== undefined) {
+      // If setting to null/empty, remove parent
+      if (!finalParentMenuId || finalParentMenuId === '') {
+        menuItem.parentMenuId = null;
+      } else {
+        // Validate parent exists
+        const parentExists = await Menu.findById(finalParentMenuId);
+        if (!parentExists) {
+          return res.status(400).json({
+            success: false,
+            message: 'Parent menu item not found',
+          });
+        }
+        // Prevent circular reference
+        if (finalParentMenuId.toString() === req.params.id) {
+          return res.status(400).json({
+            success: false,
+            message: 'A menu item cannot be its own parent',
+          });
+        }
+        menuItem.parentMenuId = finalParentMenuId;
       }
     }
     

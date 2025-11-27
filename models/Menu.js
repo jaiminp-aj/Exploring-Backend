@@ -33,6 +33,11 @@ const MenuSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  parentMenuId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Menu',
+    default: null,
+  },
 }, {
   timestamps: true,
 });
@@ -41,6 +46,14 @@ const MenuSchema = new mongoose.Schema({
 MenuSchema.pre('validate', function(next) {
   if (!this.menuTitle?.en && !this.menuTitle?.es) {
     this.invalidate('menuTitle', 'Menu title is required in at least one language');
+  }
+  next();
+});
+
+// Prevent circular references - a menu item cannot be its own parent
+MenuSchema.pre('validate', async function(next) {
+  if (this.parentMenuId && this._id && this.parentMenuId.toString() === this._id.toString()) {
+    this.invalidate('parentMenuId', 'A menu item cannot be its own parent');
   }
   next();
 });
