@@ -103,10 +103,10 @@ router.get('/', getLanguage, async (req, res) => {
     if (allLanguages === 'true') {
       // Use lean() to get plain JavaScript objects without Mongoose transformations
       // This ensures nested language objects are preserved exactly as stored
-      banners = await Banner.find(query).lean().sort({ order: 1, createdAt: -1 });
+      banners = await Banner.find(query).lean().sort({ order: 1, createdAt: 1 });
       transformed = banners;
     } else {
-      banners = await Banner.find(query).sort({ order: 1, createdAt: -1 });
+      banners = await Banner.find(query).sort({ order: 1, createdAt: 1 });
       transformed = transformArrayByLanguage(banners, language);
     }
 

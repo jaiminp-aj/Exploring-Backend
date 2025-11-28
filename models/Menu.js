@@ -21,6 +21,16 @@ const MenuSchema = new mongoose.Schema({
     required: [true, 'Link URL is required'],
     trim: true,
   },
+  pageContent: {
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
+  },
   visibleOnSite: {
     type: Boolean,
     default: true,

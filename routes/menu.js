@@ -11,6 +11,7 @@ router.post('/add', auth, async (req, res) => {
     const {
       menuTitle,
       linkUrl,
+      pageContent,
       visibleOnSite,
       openInNewTab,
       order,
@@ -57,6 +58,7 @@ router.post('/add', auth, async (req, res) => {
     // prepareForSave handles both nested objects and flat strings
     const menuData = prepareForSave({
       menuTitle,
+      pageContent,
       visibleOnSite: visibleOnSite !== undefined ? visibleOnSite : true,
       openInNewTab: openInNewTab !== undefined ? openInNewTab : false,
       order: order !== undefined ? order : 0,
@@ -301,6 +303,7 @@ router.put('/:id', auth, async (req, res) => {
     const {
       menuTitle,
       linkUrl,
+      pageContent,
       visibleOnSite,
       openInNewTab,
       order,
@@ -321,6 +324,23 @@ router.put('/:id', auth, async (req, res) => {
         menuItem.menuTitle = {
           ...(menuItem.menuTitle || {}),
           [lang]: menuTitle
+        };
+      }
+    }
+
+    // Handle pageContent update
+    if (pageContent !== undefined) {
+      if (typeof pageContent === 'object' && (pageContent.en !== undefined || pageContent.es !== undefined)) {
+        // New format: nested object with en/es keys - merge it
+        menuItem.pageContent = {
+          ...(menuItem.pageContent || {}),
+          ...pageContent
+        };
+      } else if (typeof pageContent === 'string') {
+        // Old format: single string value - update for specified language
+        menuItem.pageContent = {
+          ...(menuItem.pageContent || {}),
+          [lang]: pageContent
         };
       }
     }
