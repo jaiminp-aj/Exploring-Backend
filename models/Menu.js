@@ -68,5 +68,6 @@ MenuSchema.pre('validate', async function(next) {
   next();
 });
 
+
 module.exports = mongoose.model('Menu', MenuSchema);
 
