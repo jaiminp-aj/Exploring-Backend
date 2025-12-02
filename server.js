@@ -12,6 +12,14 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from uploads directory
 const path = require('path');
+
+app.use(express.static(path.join(__dirname, "dist")));
+
+// app.use(formidable());
+app.get("*", function (req, res) {
+    res.sendFile(path.join(__dirname, "dist/index.html"));
+});
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Connect to MongoDB with retry logic

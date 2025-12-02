@@ -1,0 +1,1 @@
+const t="data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='17'%20viewBox='0%200%2016%2017'%3e%3cpath%20id='Polygon_5'%20data-name='Polygon%205'%20d='M8.5,0,17,16H0Z'%20transform='translate(0%2017)%20rotate(-90)'%20fill='rgba(37,37,37,0.2)'/%3e%3c/svg%3e";export{t as p};
