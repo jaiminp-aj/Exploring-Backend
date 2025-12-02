@@ -74,15 +74,15 @@ app.use('/api/basics', require('./routes/basics'));
 
 // Health check route
 
-app.use(express.static(path.join(__dirname, "dist")));
+// app.use(express.static(path.join(__dirname, "dist")));
 
-// app.use(formidable());
-app.get("*", function (req, res) {
-    res.sendFile(path.join(__dirname, "dist/index.html"));
-});
-// app.get('/', (req, res) => {
-//   res.json({ message: 'API is running' });
+// // app.use(formidable());
+// app.get("*", function (req, res) {
+//     res.sendFile(path.join(__dirname, "dist/index.html"));
 // });
+app.get('/', (req, res) => {
+  res.json({ message: 'API is running' });
+});
 
 // Start the server
 const PORT = process.env.PORT || 5001;
