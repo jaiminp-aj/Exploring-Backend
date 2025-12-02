@@ -9,6 +9,8 @@ const { transformByLanguage, prepareForSave } = require('../utils/languageHelper
 router.post('/add', auth, async (req, res) => {
   try {
     const {
+      poweredBy,
+      followSections,
       copyrightTitle,
       description,
       address,
@@ -20,34 +22,24 @@ router.post('/add', auth, async (req, res) => {
       additionalInfo,
     } = req.body;
 
-    // Validation - check if copyrightTitle exists (either as string or nested object)
-    const hasCopyrightTitle = copyrightTitle && (
-      typeof copyrightTitle === 'string' || 
-      (typeof copyrightTitle === 'object' && (copyrightTitle.en || copyrightTitle.es))
-    );
-    
-    if (!hasCopyrightTitle) {
-      return res.status(400).json({
-        success: false,
-        message: 'Copyright title is required in at least one language',
-      });
-    }
-
     const { lang = 'en' } = req.body; // For backward compatibility
     
     // Prepare data with language support
-    // prepareForSave handles both nested objects and flat strings
-    const footerData = prepareForSave({
-      copyrightTitle,
-      description,
-      address,
-      phone,
-      email,
-      links: links || [],
-      socialMedia: socialMedia || [],
-      quickLinks: quickLinks || [],
-      additionalInfo,
-    }, lang);
+    const footerData = {
+      poweredBy: poweredBy || {},
+      followSections: followSections || {},
+      ...prepareForSave({
+        copyrightTitle,
+        description,
+        address,
+        phone,
+        email,
+        links: links || [],
+        socialMedia: socialMedia || [],
+        quickLinks: quickLinks || [],
+        additionalInfo,
+      }, lang),
+    };
 
     // Create new footer
     const footer = new Footer(footerData);
@@ -121,6 +113,8 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     const {
+      poweredBy,
+      followSections,
       copyrightTitle,
       description,
       address,
@@ -133,6 +127,15 @@ router.put('/:id', auth, async (req, res) => {
     } = req.body;
 
     const { lang = 'en' } = req.body;
+    
+    // Handle new footer structure
+    if (poweredBy !== undefined) {
+      footer.poweredBy = poweredBy;
+    }
+    
+    if (followSections !== undefined) {
+      footer.followSections = followSections;
+    }
     
     // Handle language-specific updates for translatable fields
     if (copyrightTitle !== undefined) {
