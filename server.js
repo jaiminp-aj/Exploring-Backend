@@ -13,13 +13,6 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static files from uploads directory
 const path = require('path');
 
-app.use(express.static(path.join(__dirname, "dist")));
-
-// app.use(formidable());
-app.get("*", function (req, res) {
-    res.sendFile(path.join(__dirname, "dist/index.html"));
-});
-
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Connect to MongoDB with retry logic
@@ -80,9 +73,16 @@ app.use('/api/what-is-islam', require('./routes/what-is-islam'));
 app.use('/api/basics', require('./routes/basics'));
 
 // Health check route
-app.get('/', (req, res) => {
-  res.json({ message: 'API is running' });
+
+app.use(express.static(path.join(__dirname, "dist")));
+
+// app.use(formidable());
+app.get("*", function (req, res) {
+    res.sendFile(path.join(__dirname, "dist/index.html"));
 });
+// app.get('/', (req, res) => {
+//   res.json({ message: 'API is running' });
+// });
 
 // Start the server
 const PORT = process.env.PORT || 5001;
