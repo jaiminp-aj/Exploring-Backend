@@ -80,6 +80,7 @@ app.use('/api/basics', require('./routes/basics'));
 // app.get("*", function (req, res) {
 //     res.sendFile(path.join(__dirname, "dist/index.html"));
 // });
+
 app.get('/', (req, res) => {
   res.json({ message: 'API is running' });
 });
