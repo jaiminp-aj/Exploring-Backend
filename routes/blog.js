@@ -16,6 +16,8 @@ router.post('/add', auth, async (req, res) => {
       featuredImageUrl,
       videoUrl,
       content,
+      bottomLeftContent,
+      bottomRightContent,
       published,
       author,
       tags,
@@ -101,6 +103,8 @@ router.post('/add', auth, async (req, res) => {
       excerpt: excerpt || { en: '', es: '' },
       slug: finalSlug,
       content: content || { en: '', es: '' },
+      bottomLeftContent: bottomLeftContent || { en: '', es: '' },
+      bottomRightContent: bottomRightContent || { en: '', es: '' },
       published: published !== undefined ? published : false,
       author,
       tags: tags || [],
@@ -333,6 +337,8 @@ router.put('/:id', auth, async (req, res) => {
       featuredImageUrl,
       videoUrl,
       content,
+      bottomLeftContent,
+      bottomRightContent,
       published,
       author,
       tags,
@@ -427,6 +433,22 @@ router.put('/:id', auth, async (req, res) => {
         blog.content = { ...(blog.content || {}), ...content };
       } else if (typeof content === 'string') {
         blog.content = { ...(blog.content || {}), [lang]: content };
+      }
+    }
+    
+    if (bottomLeftContent !== undefined) {
+      if (typeof bottomLeftContent === 'object' && (bottomLeftContent.en !== undefined || bottomLeftContent.es !== undefined)) {
+        blog.bottomLeftContent = { ...(blog.bottomLeftContent || {}), ...bottomLeftContent };
+      } else if (typeof bottomLeftContent === 'string') {
+        blog.bottomLeftContent = { ...(blog.bottomLeftContent || {}), [lang]: bottomLeftContent };
+      }
+    }
+    
+    if (bottomRightContent !== undefined) {
+      if (typeof bottomRightContent === 'object' && (bottomRightContent.en !== undefined || bottomRightContent.es !== undefined)) {
+        blog.bottomRightContent = { ...(blog.bottomRightContent || {}), ...bottomRightContent };
+      } else if (typeof bottomRightContent === 'string') {
+        blog.bottomRightContent = { ...(blog.bottomRightContent || {}), [lang]: bottomRightContent };
       }
     }
     

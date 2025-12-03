@@ -57,6 +57,26 @@ const BlogSchema = new mongoose.Schema({
       trim: true,
     },
   },
+  bottomLeftContent: {
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
+  },
+  bottomRightContent: {
+    en: {
+      type: String,
+      trim: true,
+    },
+    es: {
+      type: String,
+      trim: true,
+    },
+  },
   published: {
     type: Boolean,
     default: false,
