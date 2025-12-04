@@ -1,0 +1,1 @@
+import{j as e}from"./index-CLYoa9F8.js";function o({}){return e.jsx("div",{className:"wrap",children:e.jsx("main",{role:"main","aria-labelledby":"page-title",children:e.jsxs("div",{className:"content",children:[e.jsx("h1",{id:"page-title",children:"BLOG NOT FOUND"}),e.jsx("p",{className:"lead",children:"The blog you were looking for could not be found."})]})})})}export{o as B};
