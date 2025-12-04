@@ -98,6 +98,10 @@ const BlogSchema = new mongoose.Schema({
     ref: 'Menu',
     default: null,
   },
+  order: {
+    type: Number,
+    default: 0,
+  },
 }, {
   timestamps: true,
 });

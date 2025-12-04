@@ -204,7 +204,15 @@ router.get('/', getLanguage, async (req, res) => {
     }
 
     const sortOptions = {};
-    sortOptions[sortBy] = finalSortOrder === 'asc' ? 1 : -1;
+    // If sorting by order, also sort by createdAt as secondary sort
+    if (sortBy === 'order') {
+      sortOptions.order = finalSortOrder === 'asc' ? 1 : -1;
+      sortOptions.createdAt = -1; // Newest first as fallback
+    } else {
+      sortOptions[sortBy] = finalSortOrder === 'asc' ? 1 : -1;
+      // Always include order as secondary sort for consistency
+      sortOptions.order = 1;
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -525,6 +533,46 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
+  }
+});
+
+// Update Blog Order (Bulk update) - Protected route
+router.put('/order/update', auth, async (req, res) => {
+  try {
+    const { blogOrders } = req.body; // Array of { id, order }
+    
+    if (!Array.isArray(blogOrders) || blogOrders.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'blogOrders must be a non-empty array',
+      });
+    }
+
+    // Update all blog items in parallel
+    const updatePromises = blogOrders.map(({ id, order }) => {
+      if (!id || order === undefined) {
+        return Promise.resolve(null);
+      }
+      return Blog.findByIdAndUpdate(
+        id,
+        { order: parseInt(order, 10) },
+        { new: true }
+      );
+    });
+
+    await Promise.all(updatePromises);
+
+    res.status(200).json({
+      success: true,
+      message: 'Blog order updated successfully',
+    });
+  } catch (error) {
+    console.error('Update blog order error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
