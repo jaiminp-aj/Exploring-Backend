@@ -172,12 +172,12 @@ router.get('/', getLanguage, async (req, res) => {
       categoryId,
       page = 1,
       limit = 10,
-      sortBy = 'createdAt',
+      sortBy = 'order',
       sortOrder
     } = req.query;
     
-    // Default sort order: Videos in ascending, Blog Posts in descending
-    const defaultSortOrder = contentType === 'Video' ? 'asc' : 'desc';
+    // Default sort order: ascending for order field (to show in the order they were arranged)
+    const defaultSortOrder = 'asc';
     const finalSortOrder = sortOrder || defaultSortOrder;
     const language = req.language;
     
@@ -204,14 +204,14 @@ router.get('/', getLanguage, async (req, res) => {
     }
 
     const sortOptions = {};
-    // If sorting by order, also sort by createdAt as secondary sort
+    // Default sorting: by order field (ascending), then createdAt as secondary sort
     if (sortBy === 'order') {
       sortOptions.order = finalSortOrder === 'asc' ? 1 : -1;
-      sortOptions.createdAt = -1; // Newest first as fallback
+      sortOptions.createdAt = -1; // Newest first as fallback for items with same order
     } else {
+      // When sorting by other fields, still include order as secondary sort
       sortOptions[sortBy] = finalSortOrder === 'asc' ? 1 : -1;
-      // Always include order as secondary sort for consistency
-      sortOptions.order = 1;
+      sortOptions.order = 1; // Secondary sort by order (ascending)
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
